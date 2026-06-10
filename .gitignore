@@ -2,3 +2,4 @@ repos/
 __pycache__/
 venv/
 parsed_files/
+chunked_files/
