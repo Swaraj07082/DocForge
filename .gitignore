@@ -3,3 +3,6 @@ __pycache__/
 venv/
 parsed_files/
 chunked_files/
+vector_store/
+*.pyc
+.env
