@@ -13,16 +13,11 @@ def build_symbol_index(chunk_file : str , symbol_index : dict = {}):
 
         symbol_index[name] = ( kind , code )
 
-    print(symbol_index)
+    with open("symbol_index.json" , "w" , encoding="utf-8") as f:
+        json.dump(symbol_index , f , indent=4)
     
 
-
-
-
-
-
 def build_call_graph(call_graph : dict = {}):
-
 
     with open("parsed_files/parsed_app.py.json" , "r" , encoding="utf-8") as f:
         parsed_data = json.load(f)
@@ -35,6 +30,9 @@ def build_call_graph(call_graph : dict = {}):
             children = node["children"]
             for child in children:
                 traverse_children(child, call_graph , parent_name)
+
+    with open("call_graph.json" , "w" , encoding="utf-8") as f:
+        json.dump(call_graph , f , indent=4)
 
 def traverse_children(node, call_graph, parent_name):
     
@@ -60,18 +58,17 @@ def build_reverse_call_graph(call_graph : dict , reverse_call_graph : dict = {})
             else:
                 reverse_call_graph[child].append(parent)
 
+    with open("reverse_call_graph.json" , "w" , encoding = "utf-8") as f:
+        json.dump(reverse_call_graph , f , indent=4)
 
 
-# symbol_index = {}
 
-# build_symbol_index("chunked_files/chunked_app.py.json" , symbol_index)
+symbol_index = {}
 call_graph = {}
-build_call_graph(call_graph)
 reverse_call_graph = {}
-build_reverse_call_graph(call_graph , reverse_call_graph)
-print("Call Graph:")
-print(call_graph)
-print("Reverse Call Graph:")
-print(reverse_call_graph)
 
-# print(symbol_index)
+build_symbol_index("chunked_files/chunked_app.py.json" , symbol_index)
+build_call_graph(call_graph)
+build_reverse_call_graph(call_graph , reverse_call_graph)
+
+
