@@ -31,11 +31,17 @@ def load_chunks_and_create_documents(chunk_file: str) -> list[Document]:
 
     documents: list[Document] = []
     for chunk in data["chunks"]:
+        page_content = f"""
+        Function : {chunk.get('name', 'Unknown')},
+        Type : {chunk.get('kind', 'Unknown')},
+        
+        Code :
+        {chunk.get('text', 'No code available')}
+"""
+        
         metadata = {
             "file": data["file"],
             "language": data.get("language"),
-            "kind": chunk["kind"],
-            "name": chunk["name"],
             "start_byte": chunk["span"]["start_byte"],
             "end_byte": chunk["span"]["end_byte"],
             "start_line": chunk["span"]["start_line"],
@@ -46,8 +52,9 @@ def load_chunks_and_create_documents(chunk_file: str) -> list[Document]:
         if "decorators" in chunk:
             metadata["decorators"] = chunk["decorators"]
 
-        documents.append(Document(page_content=chunk["text"], metadata=metadata))
+        documents.append(Document(page_content=page_content, metadata=metadata))
 
+    # print(documents[0])
     return documents
 
 
