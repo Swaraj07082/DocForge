@@ -10,8 +10,9 @@ def build_symbol_index(chunk_file : str , symbol_index : dict = {}):
         name = chunk.get("name" , "Unknown")
         kind = chunk.get("kind" , "Unknown")
         code = chunk.get("text" , "No code available")
+        file = chunk.get("file" , "Unknown")
 
-        symbol_index[name] = ( kind , code )
+        symbol_index[name] = ( file , kind , code )
 
     with open("symbol_index.json" , "w" , encoding="utf-8") as f:
         json.dump(symbol_index , f , indent=4)

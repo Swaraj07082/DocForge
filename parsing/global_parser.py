@@ -46,13 +46,15 @@ def parse(file: str, ending: str) -> list[Tree, bytes]:
 
 
 
-def node_to_metadata(node: Node, source_code: bytes) -> dict:
+def node_to_metadata(node: Node, source_code: bytes , file: str, language: str) -> dict:
     start_byte = node.start_byte()
     end_byte = node.end_byte()
     start_pos = node.start_position()
     end_pos = node.end_position()
 
     return {
+        "file": file,
+        "language": language,
         "kind": node.kind(),
         "kind_id": node.kind_id(),
         "span": {
@@ -76,14 +78,14 @@ def node_to_metadata(node: Node, source_code: bytes) -> dict:
     }
 
 
-def walk_tree(node: Node, source_code: bytes) -> list[dict]:
+def walk_tree(node: Node, source_code: bytes, file: str , language: str) -> list[dict]:
     nodes: list[dict] = []
     for i in range(node.named_child_count()):
         child = node.named_child(i)
         if child is None:
             continue
-        meta = node_to_metadata(child, source_code)
-        meta["children"] = walk_tree(child, source_code)
+        meta = node_to_metadata(child, source_code , file , language)
+        meta["children"] = walk_tree(child, source_code, file, language)
         nodes.append(meta)
     return nodes
 
@@ -94,7 +96,7 @@ def extract_file_metadata(file: str, ending: str) -> dict:
     return {
         "file": file,
         "language": language,
-        "nodes": walk_tree(tree.root_node(), source_code),
+        "nodes": walk_tree(tree.root_node(), source_code , file , language),
     }
 
 for file in files:

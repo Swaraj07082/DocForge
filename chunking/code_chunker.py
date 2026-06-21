@@ -28,6 +28,8 @@ def _extract_decorators(node: dict) -> list[str]:
 
 def _make_chunk(
     *,
+    file: str | None,
+    language: str | None,
     kind: str,
     name: str | None,
     text: str,
@@ -37,6 +39,8 @@ def _make_chunk(
     decorators: list[str] | None = None,
 ) -> dict:
     chunk: dict = {
+        "file": file,
+        "language": language,
         "kind": kind,
         "name": name,
         "text": text,
@@ -50,7 +54,7 @@ def _make_chunk(
     return chunk
 
 
-def _collect_chunks(nodes: list[dict], chunks: list[dict], parent: str | None = None) -> None:
+def _collect_chunks(nodes: list[dict], chunks: list[dict], parent: str | None = None, file: str | None = None, language: str | None = None) -> None:
     for node in nodes:
         kind = node["kind"]
 
@@ -61,6 +65,8 @@ def _collect_chunks(nodes: list[dict], chunks: list[dict], parent: str | None = 
             )
             chunks.append(
                 _make_chunk(
+                    file=file,
+                    language=language,
                     kind=inner["kind"] if inner else kind,
                     name=_extract_name(inner) if inner else None,
                     text=node["text"],
@@ -71,13 +77,15 @@ def _collect_chunks(nodes: list[dict], chunks: list[dict], parent: str | None = 
                 )
             )
             if inner is not None:
-                _collect_chunks(inner.get("children", []), chunks, parent=parent)
+                _collect_chunks(inner.get("children", []), chunks, parent=parent , file=file , language=language)
             continue
 
         if kind in CHUNK_KINDS:
             name = _extract_name(node)
             chunks.append(
                 _make_chunk(
+                    file=file,
+                    language=language,
                     kind=kind,
                     name=name,
                     text=node["text"],
@@ -87,10 +95,10 @@ def _collect_chunks(nodes: list[dict], chunks: list[dict], parent: str | None = 
                 )
             )
             child_parent = name if kind == "class_definition" else parent
-            _collect_chunks(node.get("children", []), chunks, parent=child_parent)
+            _collect_chunks(node.get("children", []), chunks, parent=child_parent, file=file, language=language)
             continue
 
-        _collect_chunks(node.get("children", []), chunks, parent=parent)
+        _collect_chunks(node.get("children", []), chunks, parent=parent, file=file, language=language)
 
 
 def chunk_code(parsed_path: str) -> list[dict]:
@@ -99,7 +107,7 @@ def chunk_code(parsed_path: str) -> list[dict]:
         parsed_code = json.load(f)
 
     chunks: list[dict] = []
-    _collect_chunks(parsed_code["nodes"], chunks)
+    _collect_chunks(parsed_code["nodes"], chunks , None , parsed_code.get("file") , parsed_code.get("language"))
 
     output_dir = Path("./chunked_files")
     output_dir.mkdir(parents=True, exist_ok=True)

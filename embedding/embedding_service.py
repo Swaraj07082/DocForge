@@ -34,14 +34,15 @@ def load_chunks_and_create_documents(chunk_file: str) -> list[Document]:
         page_content = f"""
         Function : {chunk.get('name', 'Unknown')},
         Type : {chunk.get('kind', 'Unknown')},
+       
         
         Code :
         {chunk.get('text', 'No code available')}
 """
         
         metadata = {
-            "file": data["file"],
-            "language": data.get("language"),
+            "file": chunk["file"],
+            "language": chunk["language"],
             "start_byte": chunk["span"]["start_byte"],
             "end_byte": chunk["span"]["end_byte"],
             "start_line": chunk["span"]["start_line"],
