@@ -9,7 +9,8 @@ from utilites.pydantic_types import AgentResponse
 
 load_dotenv()
 
-class RefactoringAgent:
+
+class ArchitectureAgent:
 
     def __init__(self , model):
         self.model = model
@@ -35,26 +36,27 @@ class RefactoringAgent:
         
 
         prompt = f"""
-        You are a refactoring agent.
+        You are a Security Agent.
         
         Review this code:
         
         {analysis}
         
         Find:
-        - Long functions
-        - Duplication
+        - Layer violations
+        - High coupling
+        - God classes
         - SRP violations
-        - Readability issues
+
         
         Return findings as JSON matching the schema. Every finding object MUST
         include ALL of these fields and you must NOT omit any of them:
         finding_type, severity, confidence, title, reasoning, recommendation,
         affected_function, affected_code.
 
-        "finding_type" MUST be exactly one of: "long_function", "duplicate_code",
-        "dead_code", "high_complexity", "large_class", "poor_naming",
-        "single_responsibility_violation", "tight_coupling", "duplication",
+        "finding_type" MUST be exactly one of: "tight_coupling", "large_class",
+        "single_responsibility_violation", "high_complexity", "poor_naming",
+        "dead_code", "long_function", "duplicate_code", "duplication",
         "readability_issue".
         "severity" MUST be one of: "low", "medium", "high", "critical".
 
@@ -83,8 +85,8 @@ class RefactoringAgent:
      response_format={
         "type": "json_schema",
         "json_schema": {
-            "strict" : True ,
             "name": "sql_query_generation",
+            "strict" : True ,
             "schema": AgentResponse.model_json_schema()
         }
     }
@@ -94,9 +96,8 @@ class RefactoringAgent:
         
 
 
-
 if __name__ == "__main__":
-    obj = RefactoringAgent("openai/gpt-oss-20b")
+    obj = ArchitectureAgent("openai/gpt-oss-20b")
     response : list = obj.get_code("app.py")
     print(response)
 
