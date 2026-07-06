@@ -8,6 +8,7 @@ from groq import Groq
 import os
 from dotenv import load_dotenv
 from utilites.pydantic_types import AgentResponse , JudgeResponse
+from utilites.get_analysis import get_analysis
 
 load_dotenv()
 
@@ -16,9 +17,11 @@ class JudgeAgent(ArchitectureAgent , SecurityAgent , RefactoringAgent , TestAgen
     def __init__(self, model):
         super().__init__(model)
         self.result : dict = {}
+        self.analysis : list = []
     
     def findings(self , file_name : str) -> dict:
 
+        self.analysis = get_analysis(file_name)
         architect_findings = ArchitectureAgent.get_code(self , file_name=file_name)
         security_findings = SecurityAgent.get_code(self , file_name=file_name)
         refactoring_findings = RefactoringAgent.get_code(self , file_name=file_name)
@@ -31,23 +34,23 @@ class JudgeAgent(ArchitectureAgent , SecurityAgent , RefactoringAgent , TestAgen
 
         return self.result
     
-    def get_code(self , file_name):
+    # def get_code(self , file_name):
         
-        with open("symbol_index.json", "r") as f:
-            symbol_index = json.load(f)
+    #     with open("symbol_index.json", "r") as f:
+    #         symbol_index = json.load(f)
 
-        # print(symbol_index)
+    #     # print(symbol_index)
 
-        functions : list = []
-        # getting all the functions from the symbol index that are in the file_name
+    #     functions : list = []
+    #     # getting all the functions from the symbol index that are in the file_name
 
-        for symbol in symbol_index:
-            if symbol_index[symbol][0] == f"{file_name}":
-                functions.append(symbol)
+    #     for symbol in symbol_index:
+    #         if symbol_index[symbol][0] == f"{file_name}":
+    #             functions.append(symbol)
 
-        analysis = []
-        for fn in functions:
-            analysis.append(analyse_symbol(fn))
+    #     analysis = []
+    #     for fn in functions:
+    #         analysis.append(analyse_symbol(fn))
 
         
 
@@ -110,8 +113,8 @@ class JudgeAgent(ArchitectureAgent , SecurityAgent , RefactoringAgent , TestAgen
      
     def judgeResponse(self , file_name):
 
-        context = self.get_code(file_name)
         findings = self.findings(file_name)
+        context = self.analysis
 
         architecture = findings["architecture"]
         security = findings["security"]

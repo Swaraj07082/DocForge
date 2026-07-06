@@ -1,5 +1,14 @@
 import json
 
+def build_symbol_id(chunk: dict) -> str:
+    file = chunk.get("file", "Unknown")
+    kind = chunk.get("kind", "Unknown")
+    name = chunk.get("name", "Unknown")
+    span = chunk.get("span", {})
+    start_line = span.get("start_line", -1)
+    start_column = span.get("start_column", -1)
+    return f"{file}::{kind}::{name}::{start_line}:{start_column}"
+
 def build_symbol_index(chunk_file : str , symbol_index : dict = {}):
 
     with open(chunk_file, "r" , encoding="utf-8") as f:
@@ -11,8 +20,9 @@ def build_symbol_index(chunk_file : str , symbol_index : dict = {}):
         kind = chunk.get("kind" , "Unknown")
         code = chunk.get("text" , "No code available")
         file = chunk.get("file" , "Unknown")
+        symbol_id = build_symbol_id(chunk)
 
-        symbol_index[name] = ( file , kind , code )
+        symbol_index[symbol_id] = ( file , kind , code , name )
 
     with open("symbol_index.json" , "w" , encoding="utf-8") as f:
         json.dump(symbol_index , f , indent=4)

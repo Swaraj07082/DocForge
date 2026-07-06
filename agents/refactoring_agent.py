@@ -1,102 +1,28 @@
-from groq import Groq
-import json
-from repo_analyser import analyse_symbol
-from pydantic import BaseModel
-from typing import List , Literal
-import os
-from dotenv import load_dotenv
-from utilites.pydantic_types import AgentResponse
+from agents.base_agent import BaseReviewAgent
 
-load_dotenv()
 
-class RefactoringAgent:
-
-    def __init__(self , model):
-        self.model = model
-
-    def get_code(self , file_name):
-        
-        with open("symbol_index.json", "r") as f:
-            symbol_index = json.load(f)
-
-        # print(symbol_index)
-
-        functions : list = []
-        # getting all the functions from the symbol index that are in the file_name
-
-        for symbol in symbol_index:
-            if symbol_index[symbol][0] == f"{file_name}":
-                functions.append(symbol)
-
-        analysis = []
-        for fn in functions:
-            analysis.append(analyse_symbol(fn))
-
-        
-
-        prompt = f"""
-        You are a refactoring agent.
-        
-        Review this code:
-        
-        {analysis}
-        
-        Find:
-        - Long functions
-        - Duplication
-        - SRP violations
-        - Readability issues
-        
-        Return findings as JSON matching the schema. Every finding object MUST
-        include ALL of these fields and you must NOT omit any of them:
-        finding_type, severity, confidence, title, reasoning, recommendation,
-        affected_function, affected_code.
-
-        "finding_type" MUST be exactly one of: "long_function", "duplicate_code",
-        "dead_code", "high_complexity", "large_class", "poor_naming",
-        "single_responsibility_violation", "tight_coupling", "duplication",
-        "readability_issue".
-        "severity" MUST be one of: "low", "medium", "high", "critical".
-
-        Be concise. Return AT MOST 4 findings. For "affected_code", include ONLY
-        the function signature line (e.g. "def predict():"), never the full
-        function body. Keep "reasoning" and "recommendation" to one short sentence.
-"""
-        
-        # print(prompt)
-
-        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-        chat_completion = client.chat.completions.create(
-            model = self.model,
-            max_tokens=4069,
-            messages=[
-        {
-            "role": "system",
-            "content": "You are a helpful assistant."
-        },
-        {
-            "role": "user",
-            "content": prompt,
-        }
-    ],
-     response_format={
-        "type": "json_schema",
-        "json_schema": {
-            "strict" : True ,
-            "name": "sql_query_generation",
-            "schema": AgentResponse.model_json_schema()
-        }
-    }
-        )
-
-        return chat_completion.choices[0].message.content
-        
-
+class RefactoringAgent(BaseReviewAgent):
+    agent_name = "refactoring"
+    role = "a Refactoring Agent."
+    focus = """Find:
+- Long functions
+- Duplication
+- SRP violations
+- Readability issues"""
+    finding_types = (
+        "long_function",
+        "duplicate_code",
+        "dead_code",
+        "high_complexity",
+        "large_class",
+        "poor_naming",
+        "single_responsibility_violation",
+        "tight_coupling",
+        "duplication",
+        "readability_issue",
+    )
 
 
 if __name__ == "__main__":
     obj = RefactoringAgent("openai/gpt-oss-20b")
-    response : list = obj.get_code("app.py")
-    print(response)
-
+    print(obj.get_code("app.py"))

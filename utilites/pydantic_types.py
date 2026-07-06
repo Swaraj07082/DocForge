@@ -12,7 +12,8 @@ class Finding(BaseModel):
     "Path Traversal", "Authentication flaws", "Authorization flaws",
     "Hardcoded credentials", "Insecure cryptography", "Unsafe deserialization",
     "SSRF", "XXE", "Sensitive information leakage", "Race conditions with security impact",
-    "Unsafe file operations", "duplication" , "readability_issue"
+    "Unsafe file operations", "duplication", "readability_issue",
+    "missing_test", "untested_branch", "missing_edge_case", "insufficient_test_coverage",
 ]
     severity: Literal["low", "medium", "high", "critical"]
     confidence: float
