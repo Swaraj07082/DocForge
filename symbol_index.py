@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 def build_symbol_id(chunk: dict) -> str:
     file = chunk.get("file", "Unknown")
@@ -29,21 +30,22 @@ def build_symbol_index(chunk_file : str , symbol_index : dict = {}):
     
 
 def build_call_graph(call_graph : dict = {}):
+    parsed_dir = Path("parsed_files")
 
-    with open("parsed_files/parsed_app.py.json" , "r" , encoding="utf-8") as f:
-        parsed_data = json.load(f)
-    
-    
-    nodes = parsed_data["nodes"]
-    for node in nodes:
-        if node["kind"] == "function_definition":
-            parent_name = node["children"][0]["text"]
-            children = node["children"]
-            for child in children:
-                traverse_children(child, call_graph , parent_name)
+    for parsed_path in sorted(parsed_dir.glob("parsed_*.json")):
+        with open(parsed_path, "r", encoding="utf-8") as f:
+            parsed_data = json.load(f)
 
-    with open("call_graph.json" , "w" , encoding="utf-8") as f:
-        json.dump(call_graph , f , indent=4)
+        nodes = parsed_data["nodes"]
+        for node in nodes:
+            if node["kind"] == "function_definition":
+                parent_name = node["children"][0]["text"]
+                children = node["children"]
+                for child in children:
+                    traverse_children(child, call_graph, parent_name)
+
+    with open("call_graph.json", "w", encoding="utf-8") as f:
+        json.dump(call_graph, f, indent=4)
 
 def traverse_children(node, call_graph, parent_name):
     
