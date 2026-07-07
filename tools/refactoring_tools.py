@@ -28,3 +28,10 @@ with ThreadPoolExecutor(max_workers = 4) as executor:
 
 
 print(results)
+
+def run_vulture(file_path : str) -> str:
+    result = subprocess.run(["vulture" , file_path] , capture_output = True , text = True)
+    return result.stdout
+
+result = run_vulture("app.py")
+print(result)
