@@ -108,7 +108,9 @@ class JudgeAgent(ArchitectureAgent , SecurityAgent , RefactoringAgent , TestAgen
     }
         )
 
-        return chat_completion.choices[0].message.content
+        raw_content = chat_completion.choices[0].message.content
+        validated = JudgeResponse.model_validate_json(raw_content)
+        return validated.model_dump_json()
 
      
     def judgeResponse(self , file_name):

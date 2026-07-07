@@ -70,4 +70,6 @@ Set the top-level "agent" field to "{self.agent_name}".
             },
         )
 
-        return chat_completion.choices[0].message.content
+        raw_content = chat_completion.choices[0].message.content
+        validated = AgentResponse.model_validate_json(raw_content)
+        return validated.model_dump_json()
