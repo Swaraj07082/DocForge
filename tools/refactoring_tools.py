@@ -1,37 +1,72 @@
 # we will use ruff and radon/lizard + vulture her to get findings
 
-
-from concurrent.futures import ThreadPoolExecutor
 import subprocess
+import sys
 
-def run_ruff(file_path : str) -> str:
-    result = subprocess.run(["ruff","check",file_path],capture_output = True , text = True)
-    return result.stdout
-
-result = run_ruff("app.py")
-print(result)
-
-# cc , mi , raw , hal
-
-def run_radon(task : str , file_path : str) -> str:
-    result = subprocess.run(["radon" , task , file_path],
-    capture_output = True , text = True)
-
-    return result.stdout
+from tools.static_findings import enrich_findings, parse_radon_cc_output, parse_ruff_output, parse_vulture_output
 
 
+def _run_tool(command: list[str], module_fallback: list[str]) -> str:
+    try:
+        result = subprocess.run(command, capture_output=True, text=True)
+    except FileNotFoundError:
+        result = subprocess.run(
+            [sys.executable, "-m", *module_fallback], capture_output=True, text=True
+        )
 
-radon_tasks = [ "cc" , "mi" , "raw" , "hal" ]
+    output = result.stdout.strip()
+    errors = result.stderr.strip()
+    if output and errors:
+        return f"{output}\n{errors}"
+    if output:
+        return output
+    if errors:
+        return errors
+    return ""
 
-with ThreadPoolExecutor(max_workers = 4) as executor:
-        results = list(executor.map(run_radon , radon_tasks , ["app.py"] * 4))
+
+def run_ruff(file_path: str) -> str:
+    return _run_tool(
+        ["ruff", "check", "--output-format=json", file_path],
+        ["ruff", "check", "--output-format=json", file_path],
+    )
 
 
-print(results)
+def run_radon(task: str, file_path: str) -> str:
+    return _run_tool(
+        ["radon", task, "-j", file_path],
+        ["radon", task, "-j", file_path],
+    )
 
-def run_vulture(file_path : str) -> str:
-    result = subprocess.run(["vulture" , file_path] , capture_output = True , text = True)
-    return result.stdout
 
-result = run_vulture("app.py")
-print(result)
+def run_vulture(file_path: str) -> str:
+    return _run_tool(["vulture", file_path], ["vulture", file_path])
+
+
+def get_ruff_findings(file_path: str) -> list[dict]:
+    raw = parse_ruff_output(run_ruff(file_path), file_path)
+    return [finding.to_dict() for finding in enrich_findings(raw)]
+
+
+def get_radon_findings(file_path: str) -> list[dict]:
+    raw = parse_radon_cc_output(run_radon("cc", file_path), file_path)
+    return [finding.to_dict() for finding in enrich_findings(raw)]
+
+
+def get_vulture_findings(file_path: str) -> list[dict]:
+    raw = parse_vulture_output(run_vulture(file_path), file_path)
+    return [finding.to_dict() for finding in enrich_findings(raw)]
+
+
+def get_refactoring_findings(file_path: str) -> list[dict]:
+    findings: list[dict] = []
+    findings.extend(get_ruff_findings(file_path))
+    findings.extend(get_radon_findings(file_path))
+    findings.extend(get_vulture_findings(file_path))
+    return findings
+
+
+if __name__ == "__main__":
+    import json
+
+    print(json.dumps(get_ruff_findings("app.py"), indent=2))
