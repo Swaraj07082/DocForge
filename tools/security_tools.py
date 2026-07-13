@@ -19,8 +19,7 @@ def _run_tool(command: list[str], module_fallback: list[str]) -> str:
 
     output = result.stdout.strip()
     errors = result.stderr.strip()
-    if output and errors:
-        return f"{output}\n{errors}"
+    # Keep structured stdout (JSON) clean for parsers.
     if output:
         return output
     if errors:

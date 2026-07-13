@@ -16,8 +16,7 @@ def _run_tool(command: list[str], module_fallback: list[str]) -> str:
 
     output = result.stdout.strip()
     errors = result.stderr.strip()
-    if output and errors:
-        return f"{output}\n{errors}"
+    # Keep structured stdout (JSON) clean for parsers.
     if output:
         return output
     if errors:
@@ -27,8 +26,9 @@ def _run_tool(command: list[str], module_fallback: list[str]) -> str:
 
 def run_ruff(file_path: str) -> str:
     return _run_tool(
-        ["ruff", "check", "--output-format=json", file_path],
-        ["ruff", "check", "--output-format=json", file_path],
+        # ruff check error.py --select ALL
+        ["ruff","check",file_path,"--select","ALL","--output-format=json"],
+        ["ruff","check",file_path,"--select","ALL","--output-format=json"],
     )
 
 
@@ -69,4 +69,5 @@ def get_refactoring_findings(file_path: str) -> list[dict]:
 if __name__ == "__main__":
     import json
 
-    print(json.dumps(get_ruff_findings("app.py"), indent=2))
+    print(json.dumps(get_ruff_findings("error.py"), indent=2))
+    # print(json.dumps(run_radon("cc" , "error.py") , indent = 2))
