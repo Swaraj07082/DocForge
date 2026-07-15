@@ -5,9 +5,6 @@ from tree_sitter_language_pack import Node, Parser, Tree, get_parser as get_ts_p
 
 repo_path = "C:/Users/Swaraj/OneDrive/Desktop/DocForge/repos/Amazon-Reviews-Sentiment-Analysis"
 
-files = os.listdir(repo_path)
-# lists files in the repo_path folder
-
 _parser_cache: dict[str, Parser] = {}
 
 
@@ -20,17 +17,15 @@ def get_parser(language: str) -> Parser:
     return _parser_cache[language]
 
 
-def parse(file: str, ending: str) -> list[Tree, bytes]:
+def parse(file: str, ending: str, repo_dir: str = repo_path) -> list[Tree, bytes]:
     language = EXTENSION_TO_LANGUAGE.get(ending)
 
     if language is None:
         raise ValueError(f"Language not supported: {ending}")
 
-    file_path = repo_path + "/" + file
+    file_path = os.path.join(repo_dir, file)
     with open(file_path, "rb") as f:
         source_code = f.read()
-        print(type(source_code))
-        # print(source_code)
 
     parser = get_parser(language)
     tree = parser.parse(source_code.decode("utf-8"))
@@ -90,8 +85,8 @@ def walk_tree(node: Node, source_code: bytes, file: str , language: str) -> list
     return nodes
 
 
-def extract_file_metadata(file: str, ending: str) -> dict:
-    tree, source_code = parse(file, ending)
+def extract_file_metadata(file: str, ending: str, repo_dir: str = repo_path) -> dict:
+    tree, source_code = parse(file, ending, repo_dir)
     language = EXTENSION_TO_LANGUAGE[ending]
     return {
         "file": file,
@@ -99,15 +94,17 @@ def extract_file_metadata(file: str, ending: str) -> dict:
         "nodes": walk_tree(tree.root_node(), source_code , file , language),
     }
 
-for file in files:
-    ending = "." + file.split(".")[-1]
-    if ending in CODE_EXTENSIONS:
-        try:
-            file_metadata = extract_file_metadata(file, ending)
-            
-            with open(f"./parsed_files/parsed_{file}.json", "w") as f:
-                json.dump(file_metadata, f)
-            # chunking step: filter nodes by kind, then attach file/language
-            # e.g. function_definition, class_definition, method_definition
-        except (ValueError, OSError, RuntimeError, TypeError) as e:
-            raise e
+if __name__ == "__main__":
+    files = os.listdir(repo_path)
+    for file in files:
+        ending = "." + file.split(".")[-1]
+        if ending in CODE_EXTENSIONS:
+            try:
+                file_metadata = extract_file_metadata(file, ending)
+
+                with open(f"./parsed_files/parsed_{file}.json", "w") as f:
+                    json.dump(file_metadata, f)
+                # chunking step: filter nodes by kind, then attach file/language
+                # e.g. function_definition, class_definition, method_definition
+            except (ValueError, OSError, RuntimeError, TypeError) as e:
+                raise e

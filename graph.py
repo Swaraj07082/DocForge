@@ -1,5 +1,8 @@
 from langgraph.graph import StateGraph, START, END
-from typing import TypedDict
+from langgraph.types import Send, interrupt, Command
+from langgraph.checkpoint.memory import MemorySaver
+from typing import TypedDict, Annotated
+import operator
 from ingestion.github_loader import load_repo
 from langchain_core.documents import Document
 from constants.languages import CODE_EXTENSIONS, EXTENSION_TO_LANGUAGE
@@ -12,6 +15,11 @@ from embedding.embedding_service import load_all_documents, build_index, save_ve
 from symbol_index import build_symbol_index, build_call_graph, build_reverse_call_graph
 from tools.refactoring_tools import get_radon_findings, get_ruff_findings, get_vulture_findings
 from utilites.get_analysis import get_analysis
+from agents.architecture_agent import ArchitectureAgent
+from agents.security_agent import SecurityAgent
+from agents.refactoring_agent import RefactoringAgent
+from agents.test_agent import TestAgent
+from agents.judge_agent import JudgeAgent
 
 class DocForgeState(TypedDict):
     clone_url: str
@@ -26,6 +34,10 @@ class DocForgeState(TypedDict):
     functions : list[str]
     file_name : str
     static_tools_findings : list[dict]
+    agent_findings : Annotated[list[dict], operator.add]
+    judge_report : str
+    approved : bool
+    final_report : str
 
 
 graph = StateGraph(DocForgeState)
@@ -54,11 +66,14 @@ def parse_documents(state : DocForgeState) -> DocForgeState:
 
     os.makedirs("./parsed_files", exist_ok=True)
 
+    repo_name = state["clone_url"].split("/")[-1]
+    repo_dir = os.path.join("repos", repo_name)
+
     for document in state["files"]:
         file = document.metadata["file_path"]
         ending = "." + file.split(".")[-1]
         if ending in CODE_EXTENSIONS:
-            file_metadata = extract_file_metadata(file, ending)
+            file_metadata = extract_file_metadata(file, ending, repo_dir)
             output_path = f"./parsed_files/parsed_{file}.json"
             with open(output_path, "w") as f:
                 json.dump(file_metadata, f)
@@ -88,25 +103,133 @@ def analyse_documents(state : DocForgeState) -> DocForgeState:
     reverse_call_graph: dict = {}
     build_reverse_call_graph(call_graph, reverse_call_graph)
 
-    functions : list[str] = []
-    
-
-    functions = get_analysis(state["symbol_index"] , state["file_path"])
-    state["functions"] = functions
+    state["symbol_index"] = symbol_index
+    state["call_graph"] = call_graph
+    state["reverse_call_graph"] = reverse_call_graph
+    state["functions"] = get_analysis(state["file_path"])
     return state
+
+MAX_STATIC_FINDINGS = 30
+
 
 def run_static_tools(state : DocForgeState) -> DocForgeState:
+    repo_name = state["clone_url"].split("/")[-1]
+    disk_path = os.path.join("repos", repo_name, state["file_path"])
     findings: list[dict] = []
-    findings.extend(get_ruff_findings(state["file_path"]))
-    findings.extend(get_radon_findings(state["file_path"]))
-    findings.extend(get_vulture_findings(state["file_path"]))
-    state["static_tools_findings"] = findings
+    findings.extend(get_ruff_findings(disk_path))
+    findings.extend(get_radon_findings(disk_path))
+    findings.extend(get_vulture_findings(disk_path))
+    state["static_tools_findings"] = findings[:MAX_STATIC_FINDINGS]
     return state
 
 
 
+AGENT_MODEL = "openai/gpt-oss-20b"
 
 
-# graph.add_node("load_documents" , load_documents)
+def architecture_agent(state : DocForgeState) -> dict:
+    result = ArchitectureAgent(AGENT_MODEL).get_code(state["file_path"], state["static_tools_findings"])
+    return {"agent_findings": [result]}
+
+
+def security_agent(state : DocForgeState) -> dict:
+    result = SecurityAgent(AGENT_MODEL).get_code(state["file_path"], state["static_tools_findings"])
+    return {"agent_findings": [result]}
+
+
+def refactoring_agent(state : DocForgeState) -> dict:
+    result = RefactoringAgent(AGENT_MODEL).get_code(state["file_path"], state["static_tools_findings"])
+    return {"agent_findings": [result]}
+
+
+def test_agent(state : DocForgeState) -> dict:
+    result = TestAgent(AGENT_MODEL).get_code(state["file_path"], state["static_tools_findings"])
+    return {"agent_findings": [result]}
+
+
+def router(state : DocForgeState) -> list[Send]:
+    return [
+        Send("architecture_agent", state),
+        Send("security_agent", state),
+        Send("refactoring_agent", state),
+        Send("test_agent", state),
+    ]
+
+
+JUDGE_MODEL = "openai/gpt-oss-20b"
+
+
+def judge_agent(state : DocForgeState) -> dict:
+    judge = JudgeAgent(JUDGE_MODEL)
+    report = judge.review(state["agent_findings"], state["functions"])
+    return {"judge_report": report}
+
+
+def human_approval(state : DocForgeState) -> dict:
+    decision = interrupt({
+        "judge_report": state["judge_report"],
+        "action": "Approve to finalize the report, or reject.",
+    })
+    approved = str(decision).strip().lower() in {"approve", "approved", "yes", "y", "true"}
+    return {"approved": approved}
+
+
+def approval_router(state : DocForgeState) -> str:
+    return "finalize_report" if state["approved"] else END
+
+
+def finalize_report(state : DocForgeState) -> dict:
+    os.makedirs("./reports", exist_ok=True)
+    output_path = f"./reports/report_{state['file_name']}.json"
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(state["judge_report"])
+    return {"final_report": state["judge_report"], "output_path": output_path}
+
+
+graph.add_node("get_file_name", get_file_name)
+graph.add_node("load_documents", load_documents)
+graph.add_node("parse_documents", parse_documents)
+graph.add_node("chunk_documents", chunk_documents)
+graph.add_node("embed_documents", embed_documents)
+graph.add_node("analyse_documents", analyse_documents)
+graph.add_node("run_static_tools", run_static_tools)
+graph.add_node("architecture_agent", architecture_agent)
+graph.add_node("security_agent", security_agent)
+graph.add_node("refactoring_agent", refactoring_agent)
+graph.add_node("test_agent", test_agent)
+graph.add_node("judge_agent", judge_agent)
+graph.add_node("human_approval", human_approval)
+graph.add_node("finalize_report", finalize_report)
+
+graph.add_edge(START, "get_file_name")
+graph.add_edge("get_file_name", "load_documents")
+graph.add_edge("load_documents", "parse_documents")
+graph.add_edge("parse_documents", "chunk_documents")
+graph.add_edge("chunk_documents", "embed_documents")
+graph.add_edge("embed_documents", "analyse_documents")
+graph.add_edge("analyse_documents", "run_static_tools")
+
+graph.add_conditional_edges(
+    "run_static_tools",
+    router,
+    ["architecture_agent", "security_agent", "refactoring_agent", "test_agent"],
+)
+
+graph.add_edge("architecture_agent", "judge_agent")
+graph.add_edge("security_agent", "judge_agent")
+graph.add_edge("refactoring_agent", "judge_agent")
+graph.add_edge("test_agent", "judge_agent")
+
+graph.add_edge("judge_agent", "human_approval")
+
+graph.add_conditional_edges(
+    "human_approval",
+    approval_router,
+    ["finalize_report", END],
+)
+
+graph.add_edge("finalize_report", END)
+
+app = graph.compile(checkpointer=MemorySaver())
 
 

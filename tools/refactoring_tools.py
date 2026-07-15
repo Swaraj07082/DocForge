@@ -25,10 +25,12 @@ def _run_tool(command: list[str], module_fallback: list[str]) -> str:
 
 
 def run_ruff(file_path: str) -> str:
+    # Focused rule set (real bugs, security, complexity) instead of ALL, which
+    # produces hundreds of stylistic findings that drown the LLM and blow past
+    # token limits. E=errors, F=pyflakes, B=bugbear, S=bandit, C90=mccabe.
     return _run_tool(
-        # ruff check error.py --select ALL
-        ["ruff","check",file_path,"--select","ALL","--output-format=json"],
-        ["ruff","check",file_path,"--select","ALL","--output-format=json"],
+        ["ruff","check",file_path,"--select","E,F,B,S,C90","--output-format=json"],
+        ["ruff","check",file_path,"--select","E,F,B,S,C90","--output-format=json"],
     )
 
 

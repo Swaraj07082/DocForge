@@ -21,8 +21,14 @@ DOCUMENTS_PATH = VECTOR_STORE_DIR / "documents.pkl"
 # Path("a").is_symlink() is equivalent to os.path.islink("a")
 # Path("a").is_mount() is equivalent to os.path.ismount("a")
 
-model = SentenceTransformer("BAAI/bge-small-en-v1.5")
-dimension = model.get_sentence_embedding_dimension()
+_model: SentenceTransformer | None = None
+
+
+def get_model() -> SentenceTransformer:
+    global _model
+    if _model is None:
+        _model = SentenceTransformer("BAAI/bge-small-en-v1.5")
+    return _model
 
 
 def load_chunks_and_create_documents(chunk_file: str) -> list[Document]:
@@ -73,6 +79,8 @@ def load_all_documents(pattern: str = CHUNKED_FILES_GLOB) -> list[Document]:
 
 
 def build_index(documents: list[Document]) -> faiss.IndexFlatIP:
+    model = get_model()
+    dimension = model.get_sentence_embedding_dimension()
     index = faiss.IndexFlatIP(dimension)
     if not documents:
         return index

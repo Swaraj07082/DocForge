@@ -1,5 +1,5 @@
-from pydantic import BaseModel , Field , ConfigDict
-from typing import Literal , List , Annotated 
+from pydantic import BaseModel , ConfigDict
+from typing import Literal , List 
 
 class Finding(BaseModel):    
 
@@ -28,7 +28,6 @@ class AgentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     agent: Literal[ "security", "refactoring", "architecture", "testing" ] 
-    symbol: Annotated[str , Field(description = "The faulty code is a function , class , decorator , etc")]
     findings: List[Finding]
 
 

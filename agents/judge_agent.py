@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 from utilites.pydantic_types import AgentResponse , JudgeResponse
 from utilites.get_analysis import get_analysis
+from utilites.groq_utils import create_chat_completion
 
 load_dotenv()
 
@@ -33,7 +34,76 @@ class JudgeAgent(ArchitectureAgent , SecurityAgent , RefactoringAgent , TestAgen
         self.result["test"] = test_findings
 
         return self.result
-    
+
+    def review(self, agent_findings: list, context: list) -> str:
+        # Trim the code context so the judge request stays under the model's
+        # per-minute token budget; the findings already carry affected_code.
+        context_str = str(context)
+        max_context_chars = 4000
+        if len(context_str) > max_context_chars:
+            context_str = context_str[:max_context_chars] + " ...[truncated]"
+
+        prompt = f"""You are a Principal Software Engineer acting as the final reviewer.
+
+You are given:
+
+1. The source code and surrounding context. - {context_str}
+2. Findings from multiple specialized review agents (each finding is tagged
+   with the "agent" that produced it): {agent_findings}
+
+Your responsibilities are:
+
+- Validate every finding against the provided code.
+- Remove duplicate findings.
+- Reject findings that are unsupported by the code.
+- Merge findings that describe the same underlying issue.
+- Resolve disagreements between agents.
+- Prioritize findings by severity and impact.
+- Produce a final review report.
+
+Do NOT invent new issues that were not raised unless they are immediately obvious from the supplied code.
+
+For every accepted finding include ALL of these fields:
+- finding_type (exactly one of the allowed finding_type values)
+- severity (one of: low, medium, high, critical)
+- confidence
+- title
+- reasoning
+- recommendation
+- affected_function
+- affected_code
+
+Also provide:
+
+- overall_code_quality_score (0-100)
+- summary
+- highest_priority_issue
+
+Return ONLY JSON matching the schema."""
+
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+        chat_completion = create_chat_completion(
+            client,
+            model=self.model,
+            max_tokens=3000,
+            reasoning_effort="low",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "strict": True,
+                    "name": "judge_review_response",
+                    "schema": JudgeResponse.model_json_schema(),
+                },
+            },
+        )
+
+        return chat_completion.choices[0].message.content
+
     # def get_code(self , file_name):
         
     #     with open("symbol_index.json", "r") as f:
@@ -146,13 +216,15 @@ Your responsibilities are:
 
 Do NOT invent new issues that were not raised unless they are immediately obvious from the supplied code.
 
-For every accepted finding include:
-- category
-- severity
+For every accepted finding include ALL of these fields:
+- finding_type (exactly one of the allowed finding_type values)
+- severity (one of: low, medium, high, critical)
 - confidence
 - title
 - reasoning
 - recommendation
+- affected_function
+- affected_code
 
 Also provide:
 
