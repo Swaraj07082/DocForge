@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DocForge · AI Code Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0b12;
+      --bg-soft: #11131f;
+      --card: #151827;
+      --card-hover: #1b1f31;
+      --border: #262b40;
+      --border-soft: #1f2436;
+      --text: #e8eaf2;
+      --text-dim: #9aa1bd;
+      --text-faint: #626a8a;
+      --accent: #7c5cff;
+      --accent-2: #22d3ee;
+      --accent-grad: linear-gradient(135deg, #7c5cff 0%, #22d3ee 100%);
+      --green: #34d399;
+      --amber: #fbbf24;
+      --orange: #fb923c;
+      --red: #f87171;
+      --shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.6);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(1200px 600px at 80% -10%, rgba(124, 92, 255, 0.14), transparent 60%),
+                  radial-gradient(900px 500px at -10% 10%, rgba(34, 211, 238, 0.1), transparent 55%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrap { max-width: 980px; margin: 0 auto; padding: 40px 24px 80px; }
+
+    /* Header */
+    header { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+    .logo {
+      width: 46px; height: 46px; border-radius: 13px;
+      background: var(--accent-grad);
+      display: grid; place-items: center;
+      box-shadow: 0 10px 30px -8px rgba(124, 92, 255, 0.6);
+      flex-shrink: 0;
+    }
+    .logo svg { width: 26px; height: 26px; }
+    .brand h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+    .brand p { font-size: 13px; color: var(--text-dim); }
+    .subtitle { color: var(--text-dim); font-size: 14px; margin: 18px 0 26px; max-width: 620px; }
+
+    /* Card */
+    .card {
+      background: linear-gradient(180deg, var(--card) 0%, var(--bg-soft) 100%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    /* Form */
+    .form-card { padding: 26px; }
+    .field { margin-bottom: 18px; }
+    .field:last-of-type { margin-bottom: 0; }
+    label { display: block; font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 8px; }
+    label .hint { font-weight: 400; color: var(--text-faint); }
+    .input-row { display: flex; gap: 14px; }
+    .input-row .field { flex: 1; margin-bottom: 0; }
+    input[type="text"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 13px 15px;
+      border-radius: 11px;
+      font-size: 14.5px;
+      font-family: inherit;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input[type="text"]::placeholder { color: var(--text-faint); }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.18);
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; font-size: 13.5px; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+      font-family: inherit; font-size: 15px; font-weight: 600;
+      padding: 13px 22px; border-radius: 11px; border: none; cursor: pointer;
+      transition: transform 0.08s ease, filter 0.15s, opacity 0.15s;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-primary { background: var(--accent-grad); color: #fff; width: 100%; margin-top: 22px; }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn-ghost { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover:not(:disabled) { background: var(--card-hover); }
+    .btn-approve { background: linear-gradient(135deg, #10b981, #34d399); color: #04120c; }
+    .btn-approve:hover:not(:disabled) { filter: brightness(1.06); }
+    .btn-reject { background: rgba(248, 113, 113, 0.12); color: var(--red); border: 1px solid rgba(248, 113, 113, 0.35); }
+    .btn-reject:hover:not(:disabled) { background: rgba(248, 113, 113, 0.2); }
+
+    /* Sections */
+    .section { margin-top: 26px; }
+    .hidden { display: none !important; }
+
+    /* Loader */
+    .loader-card { padding: 34px 28px; }
+    .loader-head { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+    .spinner {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 3px solid rgba(124, 92, 255, 0.25);
+      border-top-color: var(--accent);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-head h3 { font-size: 17px; font-weight: 700; }
+    .loader-head p { font-size: 13px; color: var(--text-dim); }
+    .steps { display: flex; flex-direction: column; gap: 2px; }
+    .step { display: flex; align-items: center; gap: 12px; padding: 9px 0; font-size: 14px; color: var(--text-faint); }
+    .step .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); flex-shrink: 0; transition: all 0.3s; }
+    .step.active { color: var(--text); }
+    .step.active .dot { background: var(--accent); box-shadow: 0 0 0 4px rgba(124, 92, 255, 0.18); }
+    .step.done { color: var(--text-dim); }
+    .step.done .dot { background: var(--green); }
+
+    /* Error */
+    .error-card { padding: 22px 24px; border-color: rgba(248, 113, 113, 0.35); }
+    .error-card h3 { color: var(--red); font-size: 15px; margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+    .error-card p { font-size: 13.5px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; word-break: break-word; }
+
+    /* Report */
+    .report-top { display: flex; gap: 22px; padding: 26px; align-items: center; }
+    .gauge { position: relative; width: 118px; height: 118px; flex-shrink: 0; }
+    .gauge svg { transform: rotate(-90deg); }
+    .gauge .val { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+    .gauge .val b { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
+    .gauge .val span { font-size: 11px; color: var(--text-faint); display: block; }
+    .report-top .meta { flex: 1; min-width: 0; }
+    .report-top .meta .tag {
+      display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600;
+      padding: 5px 11px; border-radius: 999px; margin-bottom: 12px;
+    }
+    .tag-review { background: rgba(251, 191, 36, 0.12); color: var(--amber); border: 1px solid rgba(251,191,36,0.3); }
+    .tag-final { background: rgba(52, 211, 153, 0.12); color: var(--green); border: 1px solid rgba(52,211,153,0.3); }
+    .report-top .meta h2 { font-size: 15px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px; }
+    .report-top .meta .summary { font-size: 14.5px; color: var(--text); line-height: 1.6; }
+
+    .priority {
+      margin: 0 26px 8px; padding: 14px 16px; border-radius: 12px;
+      background: rgba(248, 113, 113, 0.08); border: 1px solid rgba(248, 113, 113, 0.22);
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .priority svg { width: 18px; height: 18px; color: var(--red); flex-shrink: 0; margin-top: 1px; }
+    .priority .lbl { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--red); }
+    .priority .txt { font-size: 14px; color: var(--text); }
+
+    .block-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 22px 26px 4px; 
+    }
+    .block-head h3 { font-size: 15px; font-weight: 700; }
+    .count { font-size: 12px; color: var(--text-faint); background: var(--bg); border: 1px solid var(--border); padding: 3px 10px; border-radius: 999px; }
+
+    .findings { padding: 12px 26px 26px; display: flex; flex-direction: column; gap: 14px; }
+    .finding {
+      background: var(--bg); border: 1px solid var(--border-soft); border-radius: 13px;
+      padding: 16px 18px; border-left-width: 3px;
+    }
+    .finding.sev-critical { border-left-color: var(--red); }
+    .finding.sev-high { border-left-color: var(--orange); }
+    .finding.sev-medium { border-left-color: var(--amber); }
+    .finding.sev-low { border-left-color: var(--accent-2); }
+    .finding-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 10px; }
+    .finding-head .f-title { font-size: 15px; font-weight: 700; margin-right: auto; }
+    .badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 7px; text-transform: uppercase; letter-spacing: 0.03em; }
+    .badge.sev-critical { background: rgba(248,113,113,0.15); color: var(--red); }
+    .badge.sev-high { background: rgba(251,146,60,0.15); color: var(--orange); }
+    .badge.sev-medium { background: rgba(251,191,36,0.15); color: var(--amber); }
+    .badge.sev-low { background: rgba(34,211,238,0.15); color: var(--accent-2); }
+    .chip { font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 7px; background: var(--card-hover); color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
+    .conf { font-size: 11px; color: var(--text-faint); }
+    .finding .row { display: flex; gap: 8px; margin-top: 8px; font-size: 13.5px; line-height: 1.55; }
+    .finding .row .k { color: var(--text-faint); flex-shrink: 0; font-weight: 600; min-width: 74px; }
+    .finding .row .v { color: var(--text); }
+    .finding .fn { font-family: 'JetBrains Mono', monospace; color: var(--accent-2); font-size: 12.5px; }
+    pre.code {
+      margin-top: 10px; background: #0c0e17; border: 1px solid var(--border-soft);
+      border-radius: 9px; padding: 11px 13px; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: #c7cbe0;
+    }
+
+    details.rejected { padding: 0 26px 26px; }
+    details.rejected summary {
+      cursor: pointer; list-style: none; font-size: 14px; font-weight: 600; color: var(--text-dim);
+      padding: 13px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 11px;
+      display: flex; align-items: center; gap: 9px;
+    }
+    details.rejected summary::-webkit-details-marker { display: none; }
+    details.rejected summary .chev { transition: transform 0.2s; margin-left: auto; }
+    details.rejected[open] summary .chev { transform: rotate(180deg); }
+    details.rejected ul { list-style: none; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    details.rejected li { font-size: 13.5px; color: var(--text-dim); padding: 9px 14px; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 9px; display: flex; gap: 9px; align-items: flex-start; }
+    details.rejected li::before { content: "✕"; color: var(--text-faint); font-size: 12px; margin-top: 2px; }
+
+    .actions { display: flex; gap: 12px; padding: 4px 26px 26px; }
+    .actions .btn { flex: 1; }
+
+    .note { padding: 16px 26px 26px; font-size: 13px; color: var(--text-faint); }
+
+    /* Modal overlay for report / approval */
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(6, 8, 16, 0.72);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 32px 16px 48px; overflow-y: auto;
+    }
+    .modal-backdrop.hidden { display: none !important; }
+    .modal {
+      width: min(920px, 100%);
+      background: linear-gradient(180deg, var(--card) 0%, var(--bg-soft) 100%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.75);
+      margin: auto 0;
+    }
+    .modal-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 16px 22px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; background: var(--card); border-radius: var(--radius) var(--radius) 0 0; z-index: 1;
+    }
+    .modal-bar h2 { font-size: 16px; font-weight: 700; }
+    .modal-bar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    .btn-pdf {
+      display: none; align-items: center; gap: 7px;
+      background: var(--bg); color: var(--text); border: 1px solid var(--border);
+      font-family: inherit; font-size: 13px; font-weight: 600;
+      padding: 8px 12px; border-radius: 9px; cursor: pointer;
+    }
+    .btn-pdf.visible { display: inline-flex; }
+    .btn-pdf:hover { background: var(--card-hover); }
+    .modal-bar .close-btn {
+      background: var(--bg); border: 1px solid var(--border); color: var(--text-dim);
+      width: 34px; height: 34px; border-radius: 9px; cursor: pointer; font-size: 18px; line-height: 1;
+    }
+    .modal-bar .close-btn:hover { color: var(--text); background: var(--card-hover); }
+
+    footer { text-align: center; margin-top: 40px; font-size: 12.5px; color: var(--text-faint); }
+    footer a { color: var(--text-dim); text-decoration: none; }
+
+    @media (max-width: 620px) {
+      .input-row { flex-direction: column; gap: 18px; }
+      .report-top { flex-direction: column; text-align: center; }
+      .actions { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 6L3 12L8 18M16 6L21 12L16 18M13 4L11 20" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="brand">
+        <h1>DocForge</h1>
+        <p>Multi-agent AI code review</p>
+      </div>
+    </header>
+
+    <p class="subtitle">
+      Point DocForge at a public Git repository and a file inside it. A team of AI agents
+      (architecture, security, refactoring &amp; testing) will analyse the code, and a judge
+      agent will compile a prioritized review report for you to approve.
+    </p>
+
+    <!-- FORM -->
+    <div class="card form-card" id="form-card">
+      <div class="field">
+        <label for="clone_url">Repository URL</label>
+        <input type="text" id="clone_url" class="mono" placeholder="https://github.com/owner/repo" />
+      </div>
+      <div class="input-row">
+        <div class="field">
+          <label for="file_path">File path <span class="hint">— relative to repo root</span></label>
+          <input type="text" id="file_path" class="mono" placeholder="src/app.py" />
+        </div>
+        <div class="field" style="max-width: 200px;">
+          <label for="branch">Branch</label>
+          <input type="text" id="branch" class="mono" placeholder="master" value="master" />
+        </div>
+      </div>
+      <button class="btn btn-primary" id="analyse-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" fill="currentColor"/></svg>
+        Analyse code
+      </button>
+    </div>
+
+    <!-- LOADER -->
+    <div class="section hidden" id="loader-section">
+      <div class="card loader-card">
+        <div class="loader-head">
+          <div class="spinner"></div>
+          <div>
+            <h3>Analysing repository…</h3>
+            <p>This can take a couple of minutes — cloning, indexing &amp; running agents.</p>
+          </div>
+        </div>
+        <div class="steps" id="steps"></div>
+      </div>
+    </div>
+
+    <!-- ERROR -->
+    <div class="section hidden" id="error-section">
+      <div class="card error-card">
+        <h3>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Something went wrong
+        </h3>
+        <p id="error-msg"></p>
+        <button class="btn btn-ghost" style="margin-top:16px" onclick="resetToForm()">Try again</button>
+      </div>
+    </div>
+
+    <footer>
+      DocForge · powered by LangGraph agents &amp; Groq · <a href="http://localhost:8000/docs">API docs</a>
+    </footer>
+  </div>
+
+  <!-- REPORT MODAL -->
+  <div class="modal-backdrop hidden" id="report-modal" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+    <div class="modal">
+      <div class="modal-bar">
+        <h2 id="report-modal-title">Review report</h2>
+        <div class="modal-bar-actions">
+          <button type="button" class="btn-pdf" id="download-pdf-btn" title="Download PDF">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l4-4m-4 4l-4-4M5 21h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Download PDF
+          </button>
+          <button type="button" class="close-btn" id="close-report-btn" aria-label="Close">×</button>
+        </div>
+      </div>
+      <div id="report-card"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+  <script>
+    const API_BASE = "http://localhost:8000";
+
+    const STAGES = [
+      "Cloning repository",
+      "Parsing & extracting metadata",
+      "Chunking code",
+      "Building embeddings & index",
+      "Running static analysis tools",
+      "Architecture · Security · Refactor · Test agents",
+      "Judge agent compiling report",
+    ];
+
+    const $ = (id) => document.getElementById(id);
+    let stepTimer = null;
+    let currentThreadId = null;
+    let currentReport = null;
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function show(id) { $(id).classList.remove("hidden"); }
+    function hide(id) { $(id).classList.add("hidden"); }
+
+    function openReportModal() {
+      show("report-modal");
+      document.body.style.overflow = "hidden";
+      $("report-modal").scrollTop = 0;
+    }
+
+    function closeReportModal() {
+      hide("report-modal");
+      document.body.style.overflow = "";
+    }
+
+    function resetToForm({ clearInputs = false } = {}) {
+      stopLoader();
+      hide("loader-section");
+      hide("error-section");
+      closeReportModal();
+      setPdfButtonVisible(false);
+      show("form-card");
+      $("analyse-btn").disabled = false;
+      currentThreadId = null;
+      currentReport = null;
+      if (clearInputs) {
+        $("clone_url").value = "";
+        $("file_path").value = "";
+        $("branch").value = "master";
+      }
+    }
+
+    function setPdfButtonVisible(visible) {
+      $("download-pdf-btn").classList.toggle("visible", !!visible);
+    }
+
+    function downloadReportPdf() {
+      const report = currentReport;
+      if (!report) {
+        alert("No report available to download.");
+        return;
+      }
+
+      const { jsPDF } = window.jspdf || {};
+      if (!jsPDF) {
+        alert("PDF library failed to load. Check your network and refresh.");
+        return;
+      }
+
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const margin = 48;
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const maxWidth = pageWidth - margin * 2;
+      let y = margin;
+
+      const ensureSpace = (needed = 18) => {
+        if (y + needed > doc.internal.pageSize.getHeight() - margin) {
+          doc.addPage();
+          y = margin;
+        }
+      };
+
+      const write = (text, opts = {}) => {
+        const fontSize = opts.fontSize || 11;
+        const fontStyle = opts.fontStyle || "normal";
+        const color = opts.color || [30, 30, 40];
+        doc.setFont("helvetica", fontStyle);
+        doc.setFontSize(fontSize);
+        doc.setTextColor(...color);
+        const lines = doc.splitTextToSize(String(text || ""), maxWidth);
+        lines.forEach((line) => {
+          ensureSpace(fontSize + 6);
+          doc.text(line, margin, y);
+          y += fontSize + 5;
+        });
+        if (opts.gap) y += opts.gap;
+      };
+
+      const filePath = ($("file_path").value || "").trim() || "report";
+      const repoUrl = ($("clone_url").value || "").trim();
+      const safeName = filePath.replace(/[^\w.-]+/g, "_");
+
+      write("DocForge Code Review Report", { fontSize: 18, fontStyle: "bold", gap: 6 });
+      if (repoUrl) write(`Repository: ${repoUrl}`, { fontSize: 10, color: [90, 95, 120] });
+      write(`File: ${filePath}`, { fontSize: 10, color: [90, 95, 120], gap: 10 });
+      write(`Quality score: ${report.overall_code_quality_score ?? "N/A"} / 100`, { fontSize: 12, fontStyle: "bold", gap: 8 });
+      write("Summary", { fontSize: 13, fontStyle: "bold", gap: 2 });
+      write(report.summary || "No summary provided.", { gap: 8 });
+      if (report.highest_priority_issue) {
+        write("Highest priority", { fontSize: 13, fontStyle: "bold", gap: 2 });
+        write(report.highest_priority_issue, { gap: 10 });
+      }
+
+      const accepted = Array.isArray(report.accepted_findings) ? report.accepted_findings : [];
+      write(`Accepted findings (${accepted.length})`, { fontSize: 13, fontStyle: "bold", gap: 6 });
+      if (!accepted.length) {
+        write("None.", { gap: 8 });
+      } else {
+        accepted.forEach((f, i) => {
+          write(`${i + 1}. ${f.title || "Finding"}`, { fontStyle: "bold", gap: 1 });
+          write(`Severity: ${f.severity || "n/a"} | Type: ${f.finding_type || "n/a"}`, { fontSize: 10, color: [90, 95, 120] });
+          if (f.affected_function) write(`Function: ${f.affected_function}`, { fontSize: 10 });
+          if (f.reasoning) write(`Why: ${f.reasoning}`);
+          if (f.recommendation) write(`Fix: ${f.recommendation}`, { gap: 8 });
+          else y += 6;
+        });
+      }
+
+      const rejected = Array.isArray(report.rejected_findings) ? report.rejected_findings : [];
+      if (rejected.length) {
+        write(`Rejected findings (${rejected.length})`, { fontSize: 13, fontStyle: "bold", gap: 6 });
+        rejected.forEach((r) => {
+          write(`• ${typeof r === "string" ? r : JSON.stringify(r)}`, { fontSize: 10 });
+        });
+      }
+
+      doc.save(`docforge_${safeName}.pdf`);
+    }
+
+    function startLoader() {
+      const container = $("steps");
+      container.innerHTML = STAGES.map((s, i) =>
+        `<div class="step" data-i="${i}"><span class="dot"></span><span>${escapeHtml(s)}</span></div>`
+      ).join("");
+      let i = 0;
+      const advance = () => {
+        const steps = container.querySelectorAll(".step");
+        if (i > 0) { steps[i - 1].classList.remove("active"); steps[i - 1].classList.add("done"); }
+        if (i < steps.length) {
+          steps[i].classList.add("active");
+          i++;
+          const delay = i <= 4 ? 2600 : 9000;
+          stepTimer = setTimeout(advance, delay);
+        }
+      };
+      advance();
+    }
+
+    function stopLoader() {
+      if (stepTimer) { clearTimeout(stepTimer); stepTimer = null; }
+    }
+
+    function normalizeReport(report) {
+      if (report == null) return null;
+      if (typeof report === "string") {
+        try { return JSON.parse(report); }
+        catch { return null; }
+      }
+      if (typeof report === "object") return report;
+      return null;
+    }
+
+    function gaugeSVG(score) {
+      const s = Math.max(0, Math.min(100, Number(score) || 0));
+      const r = 52, c = 2 * Math.PI * r;
+      const off = c * (1 - s / 100);
+      let color = "#34d399";
+      if (s < 40) color = "#f87171";
+      else if (s < 60) color = "#fb923c";
+      else if (s < 80) color = "#fbbf24";
+      return `
+        <div class="gauge">
+          <svg width="118" height="118" viewBox="0 0 118 118">
+            <circle cx="59" cy="59" r="${r}" fill="none" stroke="#262b40" stroke-width="9"/>
+            <circle cx="59" cy="59" r="${r}" fill="none" stroke="${color}" stroke-width="9"
+              stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/>
+          </svg>
+          <div class="val"><div><b style="color:${color}">${s}</b><span>/ 100</span></div></div>
+        </div>`;
+    }
+
+    function findingHTML(f) {
+      if (!f || typeof f !== "object") {
+        return `<div class="finding sev-low"><div class="finding-head"><span class="f-title">${escapeHtml(f)}</span></div></div>`;
+      }
+      const sev = String(f.severity || "low").toLowerCase();
+      const conf = f.confidence != null ? Math.round(Number(f.confidence) * 100) + "% confidence" : "";
+      return `
+        <div class="finding sev-${escapeHtml(sev)}">
+          <div class="finding-head">
+            <span class="f-title">${escapeHtml(f.title)}</span>
+            <span class="badge sev-${escapeHtml(sev)}">${escapeHtml(sev)}</span>
+            ${f.finding_type ? `<span class="chip">${escapeHtml(f.finding_type)}</span>` : ""}
+            ${conf ? `<span class="conf">${escapeHtml(conf)}</span>` : ""}
+          </div>
+          ${f.affected_function ? `<div class="row"><span class="k">Function</span><span class="v fn">${escapeHtml(f.affected_function)}</span></div>` : ""}
+          ${f.reasoning ? `<div class="row"><span class="k">Why</span><span class="v">${escapeHtml(f.reasoning)}</span></div>` : ""}
+          ${f.recommendation ? `<div class="row"><span class="k">Fix</span><span class="v">${escapeHtml(f.recommendation)}</span></div>` : ""}
+          ${f.affected_code ? `<pre class="code">${escapeHtml(f.affected_code)}</pre>` : ""}
+        </div>`;
+    }
+
+    function renderReport(report, status) {
+      const normalized = normalizeReport(report);
+      if (!normalized) {
+        setPdfButtonVisible(false);
+        $("report-card").innerHTML = `
+          <div class="note">
+            <p style="margin-bottom:10px;color:var(--red)">Could not parse report.</p>
+            <pre class="code">${escapeHtml(typeof report === "string" ? report : JSON.stringify(report, null, 2))}</pre>
+          </div>`;
+        openReportModal();
+        return;
+      }
+
+      currentReport = normalized;
+      const accepted = Array.isArray(normalized.accepted_findings) ? normalized.accepted_findings : [];
+      const rejected = Array.isArray(normalized.rejected_findings) ? normalized.rejected_findings : [];
+      const awaiting = status === "awaiting_approval";
+
+      $("report-modal-title").textContent = awaiting ? "Review report — awaiting approval" : "Review report — finalized";
+      setPdfButtonVisible(!awaiting && (status === "completed" || status === "approved"));
+
+      const tag = awaiting
+        ? `<span class="tag tag-review">● Awaiting your approval</span>`
+        : `<span class="tag tag-final">✓ Report finalized</span>`;
+
+      let html = `
+        <div class="report-top">
+          ${gaugeSVG(normalized.overall_code_quality_score)}
+          <div class="meta">
+            ${tag}
+            <h2>Summary</h2>
+            <div class="summary">${escapeHtml(normalized.summary) || "No summary provided."}</div>
+          </div>
+        </div>`;
+
+      if (normalized.highest_priority_issue) {
+        html += `
+          <div class="priority">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div><div class="lbl">Highest priority</div><div class="txt">${escapeHtml(normalized.highest_priority_issue)}</div></div>
+          </div>`;
+      }
+
+      html += `<div class="block-head"><h3>Accepted findings</h3><span class="count">${accepted.length}</span></div>`;
+      if (accepted.length) {
+        html += `<div class="findings">${accepted.map(findingHTML).join("")}</div>`;
+      } else {
+        html += `<div class="note">No issues were accepted. Nice, clean code!</div>`;
+      }
+
+      if (rejected.length) {
+        html += `
+          <details class="rejected">
+            <summary>Rejected findings <span class="count">${rejected.length}</span>
+              <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </summary>
+            <ul>${rejected.map((r) => `<li>${escapeHtml(typeof r === "string" ? r : JSON.stringify(r))}</li>`).join("")}</ul>
+          </details>`;
+      }
+
+      if (awaiting) {
+        html += `
+          <div class="actions">
+            <button class="btn btn-approve" id="approve-btn" type="button">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Approve &amp; finalize
+            </button>
+            <button class="btn btn-reject" id="reject-btn" type="button">Reject</button>
+          </div>
+          <div class="note">Review the findings above, then approve to finalize or reject to discard.</div>`;
+      } else if (status === "completed" || status === "approved") {
+        html += `
+          <div class="note">Report approved and finalized. Use <b>Download PDF</b> in the top right to save it.
+            <button class="btn btn-ghost" style="margin-top:14px;width:auto" type="button" id="new-analysis-btn">New analysis</button>
+          </div>`;
+      }
+
+      $("report-card").innerHTML = html;
+      openReportModal();
+
+      if (awaiting) {
+        $("approve-btn").addEventListener("click", () => decide("approve"));
+        $("reject-btn").addEventListener("click", () => decide("reject"));
+      }
+      const newBtn = $("new-analysis-btn");
+      if (newBtn) newBtn.addEventListener("click", () => resetToForm());
+    }
+
+    function returnToFormAfterReject() {
+      // Keep repo URL / file path / branch — just close the review UI.
+      resetToForm({ clearInputs: false });
+      hide("error-section");
+      show("form-card");
+      $("form-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function showError(message) {
+      stopLoader();
+      hide("loader-section");
+      closeReportModal();
+      $("error-msg").textContent = message || "Unknown error";
+      show("error-section");
+      show("form-card");
+      $("analyse-btn").disabled = false;
+      $("error-section").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    async function analyse() {
+      const clone_url = $("clone_url").value.trim();
+      const file_path = $("file_path").value.trim();
+      const branch = $("branch").value.trim() || "master";
+
+      if (!clone_url || !file_path) {
+        alert("Please provide both a repository URL and a file path.");
+        return;
+      }
+
+      $("analyse-btn").disabled = true;
+      hide("form-card");
+      hide("error-section");
+      closeReportModal();
+      show("loader-section");
+      startLoader();
+
+      try {
+        const res = await fetch(`${API_BASE}/analyse`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clone_url, file_path, branch }),
+        });
+
+        const rawText = await res.text();
+        let data;
+        try {
+          data = rawText ? JSON.parse(rawText) : {};
+        } catch {
+          throw new Error(`Invalid JSON from server (${res.status}): ${rawText.slice(0, 200)}`);
+        }
+
+        stopLoader();
+        hide("loader-section");
+
+        if (!res.ok) {
+          const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
+          throw new Error(detail || `Request failed (${res.status})`);
+        }
+
+        currentThreadId = data.thread_id || null;
+
+        // Keep form available behind the modal so closing isn't a blank page
+        show("form-card");
+        $("analyse-btn").disabled = false;
+
+        if (data.report != null) {
+          setPdfButtonVisible(false);
+          renderReport(data.report, data.status || "awaiting_approval");
+        } else {
+          setPdfButtonVisible(false);
+          $("report-modal-title").textContent = "Raw response";
+          $("report-card").innerHTML = `<div class="note"><pre class="code">${escapeHtml(JSON.stringify(data, null, 2))}</pre></div>`;
+          openReportModal();
+        }
+      } catch (err) {
+        showError(err.message || String(err));
+      }
+    }
+
+    async function decide(decision) {
+      if (!currentThreadId) {
+        showError("Missing thread_id — run analyse again.");
+        return;
+      }
+
+      const approveBtn = $("approve-btn");
+      const rejectBtn = $("reject-btn");
+      if (approveBtn) approveBtn.disabled = true;
+      if (rejectBtn) rejectBtn.disabled = true;
+
+      if (decision === "approve" && approveBtn) {
+        approveBtn.innerHTML = `<span class="spinner" style="width:16px;height:16px;border-width:2px"></span> Finalizing…`;
+      }
+      if (decision === "reject" && rejectBtn) {
+        rejectBtn.textContent = "Rejecting…";
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/approve`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            thread_id: currentThreadId,
+            decision,
+          }),
+        });
+
+        const rawText = await res.text();
+        let data;
+        try {
+          data = rawText ? JSON.parse(rawText) : {};
+        } catch {
+          throw new Error(`Invalid JSON from server (${res.status}): ${rawText.slice(0, 200)}`);
+        }
+
+        if (!res.ok) {
+          const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
+          throw new Error(detail || `Request failed (${res.status})`);
+        }
+
+        const status = String(data.status || "").toLowerCase();
+
+        if (decision === "reject" || status === "reject" || status === "rejected") {
+          returnToFormAfterReject();
+          return;
+        }
+
+        const report = data.report || currentReport;
+        if (report) {
+          renderReport(report, status === "approve" || status === "approved" ? "approved" : "completed");
+        } else {
+          setPdfButtonVisible(false);
+          $("report-modal-title").textContent = "Approved";
+          $("report-card").innerHTML = `
+            <div class="report-top">
+              <div class="meta">
+                <span class="tag tag-final">✓ Report finalized</span>
+                <div class="summary">Approved successfully.</div>
+                <button class="btn btn-ghost" style="margin-top:18px" type="button" id="new-analysis-btn">New analysis</button>
+              </div>
+            </div>`;
+          openReportModal();
+          $("new-analysis-btn").addEventListener("click", () => resetToForm());
+        }
+      } catch (err) {
+        if (approveBtn) {
+          approveBtn.disabled = false;
+          approveBtn.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Approve &amp; finalize`;
+        }
+        if (rejectBtn) {
+          rejectBtn.disabled = false;
+          rejectBtn.textContent = "Reject";
+        }
+        showError(err.message || String(err));
+      }
+    }
+
+    $("analyse-btn").addEventListener("click", analyse);
+    $("download-pdf-btn").addEventListener("click", downloadReportPdf);
+    $("close-report-btn").addEventListener("click", () => {
+      closeReportModal();
+      setPdfButtonVisible(false);
+      show("form-card");
+      $("analyse-btn").disabled = false;
+    });
+    $("report-modal").addEventListener("click", (e) => {
+      if (e.target === $("report-modal")) {
+        closeReportModal();
+        setPdfButtonVisible(false);
+        show("form-card");
+        $("analyse-btn").disabled = false;
+      }
+    });
+    ["clone_url", "file_path", "branch"].forEach((id) => {
+      $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") analyse(); });
+    });
+  </script>
+</body>
+</html>

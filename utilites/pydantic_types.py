@@ -1,5 +1,5 @@
 from pydantic import BaseModel , ConfigDict
-from typing import Literal , List 
+from typing import Literal , List , Optional
 
 class Finding(BaseModel):    
 
@@ -20,8 +20,8 @@ class Finding(BaseModel):
     title: str
     reasoning: str
     recommendation: str
-    affected_function: str
-    affected_code: str
+    affected_function: Optional[str]
+    affected_code: Optional[str]
 
 class AgentResponse(BaseModel):
     
