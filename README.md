@@ -1,126 +1,81 @@
-# DocPilot AI
+# DocForge
 
-> **AI-Powered Documentation Engineer for Software Teams**
+> **Multi-agent code review for a target file in a GitHub repository**
 
-DocPilot AI is a production-grade Retrieval-Augmented Generation (RAG) system that automatically understands software repositories, answers codebase questions, generates documentation, detects outdated docs, and assists engineering teams in maintaining accurate technical knowledge.
-
-The project combines **Hybrid Search**, **FAISS**, **LangGraph Agents**, **Code Parsing**, **Knowledge Graphs**, and **Large Language Models** to create an intelligent documentation assistant capable of understanding complex software systems.
+DocForge clones a repository, parses it with Tree-sitter, chunks functions and classes, **embeds chunks into a local FAISS index**, builds a **symbol index** and **call graph**, runs static analyzers (Ruff, Radon, Vulture), and runs parallel LLM review agents (architecture, security, refactoring, tests). A judge agent merges findings; you approve or reject the report via the API and frontend.
 
 ## Table of Contents
 
 - [Motivation](#motivation)
 - [Key Features](#key-features)
+- [Context: graph vs vector store](#context-graph-vs-vector-store)
 - [System Architecture](#system-architecture)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
+- [Running locally](#running-locally)
 - [Development Roadmap](#development-roadmap)
-- [Example Queries](#example-queries)
 - [Skills Demonstrated](#skills-demonstrated)
-- [Resume Description](#resume-description)
 
 ---
 
 ## Motivation
 
-Software documentation becomes outdated rapidly as repositories evolve. Engineering teams frequently face:
-
-- Missing API documentation
-- Stale README files
-- Inconsistent architecture diagrams
-- Difficult onboarding processes
-- Time-consuming codebase exploration
-- Lack of documentation reviews during pull requests
-
-DocPilot AI addresses these problems by acting as an autonomous **Documentation Engineer**.
+Teams need consistent, multi-perspective review of a file without manually stitching static tools, call-graph context, and LLM prompts. DocForge automates that pipeline and returns a structured JSON report with human-in-the-loop approval.
 
 ---
 
 ## Key Features
 
-### Repository Intelligence
+### Repository ingestion & parsing
 
-- Parse entire repositories
-- Understand project structure
-- Extract classes, functions, and APIs
-- Track code relationships
+- Clone a GitHub repo (branch configurable)
+- Tree-sitter metadata extraction per supported language
+- Function- and class-level chunking written to `chunked_files/`
 
-### AI-Powered Code Search
+### Embeddings & FAISS index (build only)
 
-Ask natural language questions about the codebase.
+After chunking, the LangGraph pipeline runs `embed_documents`:
 
-**Example query:**
+- Chunks are turned into LangChain `Document` objects (`embedding/embedding_service.py`)
+- **BGE-small** embeddings with L2 normalization
+- **FAISS IndexFlatIP** saved under `vector_store/` (`index.faiss`, `documents.pkl`)
 
-```text
-How is JWT authentication implemented?
-```
+This prepares the repo for semantic search; see [Context: graph vs vector store](#context-graph-vs-vector-store) for what actually feeds the agents today.
 
-The system retrieves relevant code and documentation before generating an answer with citations.
+### Graph-based code context (used by agents)
 
-### Documentation Generation
+- Symbol index mapping symbols to file, kind, and source
+- Forward and reverse call graphs for each function
+- Per-function payloads fed to review agents via `get_analysis` / `repo_analyser`
 
-Automatically generate:
+### Static analysis grounding
 
-- API documentation
-- Function descriptions
-- Class documentation
-- README sections
-- Usage examples
+- Ruff, Radon, and Vulture findings (capped) passed into agent prompts as grounding signals
 
-**Input:**
+### Multi-agent review + judge
 
-```python
-@app.post("/users")
-def create_user():
-    pass
-```
+| Agent | Focus |
+|-------|--------|
+| Architecture | Design and structure |
+| Security | Security issues |
+| Refactoring | Maintainability |
+| Test | Test coverage and quality |
+| Judge | Consolidates agent outputs |
 
-**Generated output:**
+Human approval step before the final report is written to `reports/`.
 
-```markdown
-### Create User
+---
 
-POST /users
+## Context: graph vs vector store
 
-Creates a new user.
+| Component | Role in `/analyse` pipeline |
+|-----------|----------------------------|
+| Symbol index + call graphs | **Yes** — primary context for all review agents |
+| FAISS vector store | **Built** during `embed_documents`, **not queried** by agents or `server.py` |
 
-Request Body:
-{
-    "email": "string",
-    "name": "string"
-}
-```
+**Experimental vector search:** after a run (or `python -m embedding.embedding_service`), you can query the index manually with `app.py` (loads `vector_store/` and runs a sample k-NN search). `load_vector_store()` in `embedding_service.py` is available for future retrieval code.
 
-### Documentation Drift Detection
-
-Detect inconsistencies between source code and documentation.
-
-| Documentation | Code |
-|---------------|------|
-| `POST /users` | `POST /api/v2/users` |
-
-**Output:** Documentation appears outdated.
-
-### Pull Request Review Assistant
-
-Automatically analyze pull requests and identify:
-
-- Missing documentation
-- Changed API contracts
-- Outdated examples
-- Required README updates
-
-### Knowledge Graph Retrieval
-
-Build relationships between components:
-
-```text
-Controller
- └── Service
-      └── Repository
-           └── Database
-```
-
-This enables graph-based retrieval beyond simple vector search.
+There is no hybrid BM25 + vector retrieval or reranker in this repo yet; the README roadmap below lists that as future work.
 
 ---
 
@@ -130,36 +85,34 @@ This enables graph-based retrieval beyond simple vector search.
 GitHub Repository
         │
         ▼
-Repository Ingestion
+Repository Ingestion (GitPython)
         │
         ▼
-Tree-Sitter Parsing
+Tree-Sitter Parsing → parsed JSON
         │
         ▼
-Metadata Extraction
+Code Chunking
         │
         ▼
-Chunking
+Embeddings → FAISS (vector_store/)     ← built, not used by agents yet
         │
         ▼
-Embeddings
+Symbol Index + Call Graphs               ← agent context
         │
         ▼
-FAISS Vector Store
+Static Tools (Ruff, Radon, Vulture)
         │
         ▼
-Hybrid Retrieval
-(BM25 + Vector Search)
+Parallel Review Agents (Groq)
         │
         ▼
-Cross Encoder Reranker
+Judge Agent
         │
         ▼
-LangGraph Agent
+Human Approval (LangGraph interrupt)
         │
         ▼
-Generated Answers
-Documentation Updates
+Final JSON Report
 ```
 
 ---
@@ -168,194 +121,94 @@ Documentation Updates
 
 | Layer | Technologies |
 |-------|--------------|
-| **Backend** | Python, FastAPI |
-| **RAG Framework** | LangChain, LangGraph |
-| **Retrieval** | FAISS, BM25, Reciprocal Rank Fusion, Cross Encoder Reranker |
-| **Code Analysis** | Tree-Sitter |
-| **Graph Layer** | NetworkX, Neo4j *(future)* |
-| **Embeddings** | OpenAI Embeddings, BGE Large |
-| **Frontend** | Next.js, TypeScript, Tailwind CSS |
-| **Database** | PostgreSQL, Redis |
+| **API** | FastAPI, Uvicorn |
+| **Workflow** | LangGraph |
+| **LLM** | Groq (structured JSON outputs) |
+| **Embeddings / index** | sentence-transformers (BGE-small), FAISS |
+| **Code analysis** | Tree-sitter, Ruff, Radon, Vulture, Semgrep (tools module) |
+| **Frontend** | Static HTML/JS (`frontend/index.html`) |
 
 ---
 
 ## Project Structure
 
 ```text
-docpilot-ai/
-├── backend/
+DocForge/
+├── server.py              # FastAPI: /analyse, /approve
+├── graph.py               # LangGraph pipeline (includes embed_documents)
+├── app.py                 # Standalone FAISS query demo (not used by API)
+├── embedding/
+│   └── embedding_service.py
 ├── ingestion/
-│   ├── github_loader.py
-│   └── file_loader.py
+│   └── github_loader.py
 ├── parsing/
-│   ├── tree_sitter_parser.py
-│   └── metadata_extractor.py
+│   └── global_parser.py
 ├── chunking/
 │   └── code_chunker.py
-├── embeddings/
-│   └── embedding_service.py
-├── vectorstore/
-│   └── faiss_store.py
-├── retrieval/
-│   ├── bm25.py
-│   ├── hybrid_search.py
-│   └── reranker.py
-├── graph/
-│   └── dependency_graph.py
-├── agents/
-│   ├── retriever_agent.py
-│   ├── documentation_agent.py
-│   └── reviewer_agent.py
-├── api/
-│   └── routes.py
+├── symbol_index.py        # Symbol index & call graphs
+├── repo_analyser.py       # Per-symbol context for agents
+├── context_retrieval.py   # Call-graph helpers (optional utilities)
+├── agents/                # Architecture, security, refactor, test, judge
+├── tools/                 # Static analysis wrappers
+├── utilites/
+│   ├── get_analysis.py
+│   └── groq_utils.py
 ├── frontend/
-├── evaluations/
-├── tests/
-└── README.md
+│   └── index.html
+└── requirements.txt
 ```
+
+---
+
+## Running locally
+
+1. Create a virtual environment and install dependencies:
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. Set `GROQ_API_KEY` in a `.env` file.
+
+3. Start the API:
+
+   ```bash
+   python server.py
+   ```
+
+4. Open `frontend/index.html` (e.g. with Live Server) and point it at `http://localhost:8000`.
+
+**API**
+
+- `POST /analyse` — body: `{ "clone_url", "file_path", "branch?" }` → returns judge report and `thread_id` when awaiting approval
+- `POST /approve` — body: `{ "thread_id", "decision" }` → finalize or reject
+
+**Optional — test vector search after indexing:**
+
+```bash
+python app.py
+```
+
+Requires an existing `vector_store/` from a prior `/analyse` run or `python embedding/embedding_service.py`.
 
 ---
 
 ## Development Roadmap
 
-### Phase 1 — Repository Ingestion
-
-**Objectives:**
-
-- Clone repositories
-- Read project files
-- Extract metadata
-- Convert files into Documents
-
-**Deliverable:**
-
-```python
-Document(
-    page_content=chunk,
-    metadata={
-        "file": "auth.py",
-        "language": "python"
-    }
-)
-```
-
-### Phase 2 — Code Chunking
-
-- Function-level chunking
-- Class-level chunking
-- Documentation chunking
-
-> Avoid naive fixed-length chunks.
-
-### Phase 3 — Embeddings & FAISS
-
-```text
-Code Chunk → Embedding → L2 Normalization → FAISS IndexFlatIP
-```
-
-Store metadata separately.
-
-### Phase 4 — Hybrid Search
-
-1. BM25 Search
-2. Vector Search
-3. Reciprocal Rank Fusion
-
-```text
-Query → BM25 → FAISS → Fusion
-```
-
-### Phase 5 — Reranking
-
-Model: `bge-reranker-large`
-
-```text
-Top 20 Retrieval Results → Reranker → Top 5 Results
-```
-
-### Phase 6 — Question Answering
-
-```text
-User Query → Retrieve → Rerank → LLM → Answer
-```
-
-Include source citations.
-
-### Phase 7 — Documentation Generation
-
-Generate API, function, and class documentation plus usage examples.
-
-### Phase 8 — Drift Detection
-
-Compare documentation against current source code. Detect:
-
-- Endpoint changes
-- Parameter changes
-- Renamed functions
-- Missing documentation
-
-### Phase 9 — Knowledge Graph
-
-Extract imports, dependencies, function calls, and module references. Build graph relationships for Graph RAG.
-
-### Phase 10 — Multi-Agent Workflow
-
-| Agent | Role |
-|-------|------|
-| **Retriever Agent** | Finds relevant context |
-| **Documentation Agent** | Generates documentation |
-| **Reviewer Agent** | Validates generated output |
-| **Drift Agent** | Detects documentation inconsistencies |
-
-```text
-User Query → Retriever → Documentation Agent → Reviewer Agent → Final Output
-```
-
----
-
-## Future Enhancements
-
-- GitHub Webhooks
-- Incremental Indexing
-- Neo4j Graph Database
-- CI/CD Integration
-- Slack Integration
-- Confluence Integration
-- Automated PR Comments
-- Multi-Repository Support
-- Codebase Visualization
-- Architecture Diagram Generation
-
----
-
-## Example Queries
-
-- `How does authentication work?`
-- `Which services call PaymentService?`
-- `Generate documentation for UserController.`
-- `Find outdated API documentation.`
-- `Explain the checkout workflow.`
+- **Wire retrieval into agents** — query FAISS (and optionally BM25) to augment symbol/call-graph context
+- **Hybrid retrieval** — reciprocal rank fusion and cross-encoder reranking
+- **Documentation generation & drift detection**
+- **PR webhooks and incremental re-indexing**
+- **Graph database** (e.g. Neo4j) for large dependency graphs
 
 ---
 
 ## Skills Demonstrated
 
-- Retrieval-Augmented Generation (RAG)
-- LangGraph Agents
-- FAISS
-- Hybrid Retrieval
-- Tree-Sitter
-- Graph RAG
-- FastAPI
-- Next.js
-- Information Retrieval
-- LLM Engineering
-- Software Architecture
-- Agentic Workflows
-- Production AI Systems
-
----
-
-## Resume Description
-
-> Built a production-grade AI Documentation Engineer that automatically analyzes software repositories, generates technical documentation, detects documentation drift, and answers codebase-related questions. Implemented hybrid retrieval using BM25, FAISS, reranking models, and graph-based code understanding with LangGraph agent workflows for repository intelligence and automated documentation maintenance.
+- LangGraph multi-step and multi-agent workflows
+- Tree-sitter code parsing and chunking
+- Embedding pipelines and FAISS indexing
+- Call-graph–driven context for LLM prompts
+- Static analysis integration with LLM review
+- FastAPI + human-in-the-loop interrupts
+- Structured LLM outputs (JSON schema)
