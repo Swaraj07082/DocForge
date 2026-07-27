@@ -1,10 +1,10 @@
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send, interrupt, Command
-from langgraph.checkpoint.memory import MemorySaver
 from typing import TypedDict, Annotated
 import operator
 from ingestion.github_loader import load_repo
 from langchain_core.documents import Document
+from langchain_core.runnables import RunnableConfig
 from constants.languages import CODE_EXTENSIONS, EXTENSION_TO_LANGUAGE
 from parsing.global_parser import extract_file_metadata
 import json
@@ -12,14 +12,23 @@ import glob
 import os
 from chunking.code_chunker import chunk_code
 from embedding.embedding_service import load_all_documents, build_index, save_vector_store , load_chunks_and_create_documents
+from queries import CREATE_REPO_TABLE_QUERY, INSERT_REPO_QUERY
 from symbol_index import build_symbol_index, build_call_graph, build_reverse_call_graph
 from tools.refactoring_tools import get_radon_findings, get_ruff_findings, get_vulture_findings
 from utilites.get_analysis import get_analysis
+from utilites.b2_utils import upload_report
 from agents.architecture_agent import ArchitectureAgent
 from agents.security_agent import SecurityAgent
 from agents.refactoring_agent import RefactoringAgent
 from agents.test_agent import TestAgent
 from agents.judge_agent import JudgeAgent
+from langgraph.checkpoint.postgres import PostgresSaver
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
+from dotenv import load_dotenv
+from datetime import datetime
+
+load_dotenv()
 
 class DocForgeState(TypedDict):
     clone_url: str
@@ -178,12 +187,32 @@ def approval_router(state : DocForgeState) -> str:
     return "finalize_report" if state["approved"] else END
 
 
-def finalize_report(state : DocForgeState) -> dict:
-    os.makedirs("./reports", exist_ok=True)
-    output_path = f"./reports/report_{state['file_name']}.json"
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(state["judge_report"])
-    return {"final_report": state["judge_report"], "output_path": output_path}
+def finalize_report(state : DocForgeState, config: RunnableConfig) -> dict:
+    thread_id = config["configurable"]["thread_id"]
+    now = datetime.now()
+
+    report_file_name = f"report_{state['file_name']}_{thread_id}.json"
+    b2_result = upload_report(state["judge_report"], report_file_name)
+    report_url = b2_result["publicUrl"]
+
+    with _pool.connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(CREATE_REPO_TABLE_QUERY)
+            cursor.execute(
+                INSERT_REPO_QUERY,
+                (
+                    state["clone_url"],
+                    state["file_path"],
+                    thread_id,
+                    report_url,
+                    state["approved"],
+                    now,
+                    now,
+                ),
+            )
+
+    print(f"[b2] uploaded {report_url}", flush=True)
+    return {"final_report": state["judge_report"], "output_path": report_url}
 
 
 graph.add_node("get_file_name", get_file_name)
@@ -230,6 +259,22 @@ graph.add_conditional_edges(
 
 graph.add_edge("finalize_report", END)
 
-app = graph.compile(checkpointer=MemorySaver())
+_db_url = os.getenv("DATABASE_URL")
+if not _db_url:
+    raise ValueError("DATABASE_URL is not set in the environment")
+
+_pool = ConnectionPool(
+    conninfo=_db_url,
+    max_size=10,
+    kwargs={
+        "autocommit": True,
+        "prepare_threshold": 0,
+        "row_factory": dict_row,
+    },
+)
+_checkpointer = PostgresSaver(_pool)
+_checkpointer.setup()
+
+app = graph.compile(checkpointer=_checkpointer)
 
 

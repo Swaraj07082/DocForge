@@ -12,3 +12,7 @@ ruff
 radon
 vulture
 semgrep
+langgraph-checkpoint-postgres
+psycopg[binary]
+psycopg-pool
+python-dotenv
