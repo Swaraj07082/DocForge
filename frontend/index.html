@@ -683,6 +683,38 @@
       $("error-section").scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
+    async function parseJsonResponse(res) {
+      const rawText = await res.text();
+      let data;
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        throw new Error(`Invalid JSON from server (${res.status}): ${rawText.slice(0, 200)}`);
+      }
+      if (!res.ok) {
+        const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
+        throw new Error(detail || `Request failed (${res.status})`);
+      }
+      return data;
+    }
+
+    async function pollTask(taskId, { intervalMs = 2000, timeoutMs = 15 * 60 * 1000 } = {}) {
+      const started = Date.now();
+      while (Date.now() - started < timeoutMs) {
+        const res = await fetch(`${API_BASE}/tasks/${taskId}`);
+        const data = await parseJsonResponse(res);
+        const status = String(data.status || "").toLowerCase();
+
+        if (status === "success") return data.result || {};
+        if (status === "failed") {
+          throw new Error(data.error || "Background task failed");
+        }
+        // pending / started / queued — keep waiting
+        await new Promise((r) => setTimeout(r, intervalMs));
+      }
+      throw new Error("Timed out waiting for background task");
+    }
+
     async function analyse() {
       const clone_url = $("clone_url").value.trim();
       const file_path = $("file_path").value.trim();
@@ -701,27 +733,22 @@
       startLoader();
 
       try {
-        const res = await fetch(`${API_BASE}/analyse`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clone_url, file_path, branch }),
-        });
+        const queued = await parseJsonResponse(
+          await fetch(`${API_BASE}/analyse`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ clone_url, file_path, branch }),
+          })
+        );
 
-        const rawText = await res.text();
-        let data;
-        try {
-          data = rawText ? JSON.parse(rawText) : {};
-        } catch {
-          throw new Error(`Invalid JSON from server (${res.status}): ${rawText.slice(0, 200)}`);
+        if (!queued.task_id) {
+          throw new Error("Server did not return a task_id");
         }
+
+        const data = await pollTask(queued.task_id);
 
         stopLoader();
         hide("loader-section");
-
-        if (!res.ok) {
-          const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
-          throw new Error(detail || `Request failed (${res.status})`);
-        }
 
         currentThreadId = data.thread_id || null;
 
@@ -762,28 +789,22 @@
       }
 
       try {
-        const res = await fetch(`${API_BASE}/approve`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            thread_id: currentThreadId,
-            decision,
-          }),
-        });
+        const queued = await parseJsonResponse(
+          await fetch(`${API_BASE}/approve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              thread_id: currentThreadId,
+              decision,
+            }),
+          })
+        );
 
-        const rawText = await res.text();
-        let data;
-        try {
-          data = rawText ? JSON.parse(rawText) : {};
-        } catch {
-          throw new Error(`Invalid JSON from server (${res.status}): ${rawText.slice(0, 200)}`);
+        if (!queued.task_id) {
+          throw new Error("Server did not return a task_id");
         }
 
-        if (!res.ok) {
-          const detail = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail || data);
-          throw new Error(detail || `Request failed (${res.status})`);
-        }
-
+        const data = await pollTask(queued.task_id);
         const status = String(data.status || "").toLowerCase();
 
         if (decision === "reject" || status === "reject" || status === "rejected") {

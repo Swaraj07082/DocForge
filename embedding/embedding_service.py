@@ -92,20 +92,26 @@ def build_index(documents: list[Document]) -> faiss.IndexFlatIP:
     return index
 
 
-def save_vector_store(index: faiss.IndexFlatIP, documents: list[Document]) -> None:
-    VECTOR_STORE_DIR.mkdir(parents=True, exist_ok=True)
-    faiss.write_index(index, str(INDEX_PATH))
-    with open(DOCUMENTS_PATH, "wb") as f:
-        # wb as we are writing a binary file
+def save_vector_store(
+    index: faiss.IndexFlatIP,
+    documents: list[Document],
+    *,
+    store_dir: str | Path = VECTOR_STORE_DIR,
+) -> None:
+    store_path = Path(store_dir)
+    store_path.mkdir(parents=True, exist_ok=True)
+    faiss.write_index(index, str(store_path / "index.faiss"))
+    with open(store_path / "documents.pkl", "wb") as f:
         pickle.dump(documents, f)
-        # converts python object to a binary stream and saves it to the file
 
 
-def load_vector_store() -> tuple[faiss.IndexFlatIP, list[Document]]:
-    index = faiss.read_index(str(INDEX_PATH))
-    with open(DOCUMENTS_PATH, "rb") as f:
+def load_vector_store(
+    store_dir: str | Path = VECTOR_STORE_DIR,
+) -> tuple[faiss.IndexFlatIP, list[Document]]:
+    store_path = Path(store_dir)
+    index = faiss.read_index(str(store_path / "index.faiss"))
+    with open(store_path / "documents.pkl", "rb") as f:
         documents = pickle.load(f)
-        # rb as we are reading a binary file
     return index, documents
 
 

@@ -20,13 +20,13 @@ class JudgeAgent(ArchitectureAgent , SecurityAgent , RefactoringAgent , TestAgen
         self.result : dict = {}
         self.analysis : list = []
     
-    def findings(self , file_name : str) -> dict:
+    def findings(self, file_name: str, workspace_dir: str = ".") -> dict:
 
-        self.analysis = get_analysis(file_name)
-        architect_findings = ArchitectureAgent.get_code(self , file_name=file_name)
-        security_findings = SecurityAgent.get_code(self , file_name=file_name)
-        refactoring_findings = RefactoringAgent.get_code(self , file_name=file_name)
-        test_findings = TestAgent.get_code(self , file_name=file_name)
+        self.analysis = get_analysis(file_name, workspace_dir=workspace_dir)
+        architect_findings = ArchitectureAgent.get_code(self, file_name=file_name, workspace_dir=workspace_dir)
+        security_findings = SecurityAgent.get_code(self, file_name=file_name, workspace_dir=workspace_dir)
+        refactoring_findings = RefactoringAgent.get_code(self, file_name=file_name, workspace_dir=workspace_dir)
+        test_findings = TestAgent.get_code(self, file_name=file_name, workspace_dir=workspace_dir)
 
         self.result["architecture"] = architect_findings
         self.result["security"] = security_findings

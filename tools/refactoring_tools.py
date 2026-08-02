@@ -45,26 +45,26 @@ def run_vulture(file_path: str) -> str:
     return _run_tool(["vulture", file_path], ["vulture", file_path])
 
 
-def get_ruff_findings(file_path: str) -> list[dict]:
+def get_ruff_findings(file_path: str, symbol_index_path: str = "symbol_index.json") -> list[dict]:
     raw = parse_ruff_output(run_ruff(file_path), file_path)
-    return [finding.to_dict() for finding in enrich_findings(raw)]
+    return [finding.to_dict() for finding in enrich_findings(raw, symbol_index_path)]
 
 
-def get_radon_findings(file_path: str) -> list[dict]:
+def get_radon_findings(file_path: str, symbol_index_path: str = "symbol_index.json") -> list[dict]:
     raw = parse_radon_cc_output(run_radon("cc", file_path), file_path)
-    return [finding.to_dict() for finding in enrich_findings(raw)]
+    return [finding.to_dict() for finding in enrich_findings(raw, symbol_index_path)]
 
 
-def get_vulture_findings(file_path: str) -> list[dict]:
+def get_vulture_findings(file_path: str, symbol_index_path: str = "symbol_index.json") -> list[dict]:
     raw = parse_vulture_output(run_vulture(file_path), file_path)
-    return [finding.to_dict() for finding in enrich_findings(raw)]
+    return [finding.to_dict() for finding in enrich_findings(raw, symbol_index_path)]
 
 
-def get_refactoring_findings(file_path: str) -> list[dict]:
+def get_refactoring_findings(file_path: str, symbol_index_path: str = "symbol_index.json") -> list[dict]:
     findings: list[dict] = []
-    findings.extend(get_ruff_findings(file_path))
-    findings.extend(get_radon_findings(file_path))
-    findings.extend(get_vulture_findings(file_path))
+    findings.extend(get_ruff_findings(file_path, symbol_index_path))
+    findings.extend(get_radon_findings(file_path, symbol_index_path))
+    findings.extend(get_vulture_findings(file_path, symbol_index_path))
     return findings
 
 

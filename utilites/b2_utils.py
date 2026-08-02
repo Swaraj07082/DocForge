@@ -119,8 +119,22 @@ def upload_bytes(
     return result
 
 
+def _b2_configured() -> bool:
+    return all(
+        os.getenv(name)
+        for name in ("B2_APPLICATION_KEY_ID", "B2_APPLICATION_KEY", "B2_BUCKET_ID")
+    )
+
+
 def upload_report(report: str, file_name: str) -> dict[str, Any]:
-    """Upload a DocForge final report string to B2 under reports/<file_name>."""
+    """Upload a DocForge final report to B2, or save locally if B2 is not configured."""
+    if not _b2_configured():
+        os.makedirs("reports", exist_ok=True)
+        local_path = os.path.join("reports", file_name)
+        with open(local_path, "w", encoding="utf-8") as f:
+            f.write(report)
+        return {"publicUrl": local_path, "local": True}
+
     object_name = f"reports/{file_name}"
     return upload_bytes(
         report.encode("utf-8"),

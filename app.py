@@ -43,4 +43,3 @@ for idx in I[0]:
     print("Document:", documents[idx])
     print("--------------------------------")
 
-

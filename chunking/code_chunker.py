@@ -101,7 +101,7 @@ def _collect_chunks(nodes: list[dict], chunks: list[dict], parent: str | None = 
         _collect_chunks(node.get("children", []), chunks, parent=parent, file=file, language=language)
 
 
-def chunk_code(parsed_path: str) -> list[dict]:
+def chunk_code(parsed_path: str, output_dir: str | Path = "./chunked_files") -> list[dict]:
     """Chunk parsed AST metadata into flat semantic units for retrieval."""
     with open(parsed_path, "r", encoding="utf-8") as f:
         parsed_code = json.load(f)
@@ -109,9 +109,9 @@ def chunk_code(parsed_path: str) -> list[dict]:
     chunks: list[dict] = []
     _collect_chunks(parsed_code["nodes"], chunks , None , parsed_code.get("file") , parsed_code.get("language"))
 
-    output_dir = Path("./chunked_files")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"chunked_{parsed_code['file']}.json"
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    output_path = out_dir / f"chunked_{parsed_code['file']}.json"
 
     payload = {
         "file": parsed_code["file"],

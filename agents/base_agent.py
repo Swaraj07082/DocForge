@@ -57,8 +57,13 @@ Review this code:
 Set the top-level "agent" field to "{self.agent_name}".
 """
 
-    def get_code(self, file_name: str, static_findings: list | None = None) -> str:
-        analysis = get_analysis(file_name)
+    def get_code(
+        self,
+        file_name: str,
+        static_findings: list | None = None,
+        workspace_dir: str = ".",
+    ) -> str:
+        analysis = get_analysis(file_name, workspace_dir=workspace_dir)
         prompt = self._build_prompt(analysis, static_findings)
 
         client = Groq(api_key=os.getenv("GROQ_API_KEY"))

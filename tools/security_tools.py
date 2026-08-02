@@ -34,9 +34,9 @@ def run_semgrep(file_name: str) -> str:
     )
 
 
-def get_semgrep_findings(file_name: str) -> list[dict]:
+def get_semgrep_findings(file_name: str, symbol_index_path: str = "symbol_index.json") -> list[dict]:
     raw = parse_semgrep_output(run_semgrep(file_name), file_name)
-    return [finding.to_dict() for finding in enrich_findings(raw)]
+    return [finding.to_dict() for finding in enrich_findings(raw, symbol_index_path)]
 
 
 if __name__ == "__main__":

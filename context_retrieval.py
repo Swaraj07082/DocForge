@@ -1,11 +1,14 @@
 import json
+from pathlib import Path
 
-def get_context(function_name : str):
-    context : dict = {}
 
-    with open("call_graph.json" , "r" , encoding="utf-8") as f:
+def get_context(function_name: str, workspace_dir: str | Path = ".") -> dict:
+    workspace = Path(workspace_dir)
+    context: dict = {}
+
+    with open(workspace / "call_graph.json", "r", encoding="utf-8") as f:
         call_graph = json.load(f)
-    with open("reverse_call_graph.json" , "r" , encoding="utf-8") as f:
+    with open(workspace / "reverse_call_graph.json", "r", encoding="utf-8") as f:
         reverse_call_graph = json.load(f)
 
     context["function_name"] = function_name
@@ -19,6 +22,5 @@ def get_context(function_name : str):
     return context
 
 
-context = get_context("remove_tags")
-
-# print(context)
+if __name__ == "__main__":
+    print(get_context("remove_tags"))

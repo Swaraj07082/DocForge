@@ -1,4 +1,5 @@
 repos/
+workspaces/
 __pycache__/
 venv/
 parsed_files/
