@@ -1,16 +1,25 @@
 import os
 import json
 from constants.languages import CODE_EXTENSIONS, EXTENSION_TO_LANGUAGE
-from tree_sitter_language_pack import Node, Parser, Tree, get_parser as get_ts_parser, has_language
+from tree_sitter_language_pack import (
+    Node,
+    Parser,
+    Tree,
+    download,
+    get_parser as get_ts_parser,
+    has_language,
+)
 
 repo_path = "C:/Users/Swaraj/OneDrive/Desktop/DocForge/repos/Amazon-Reviews-Sentiment-Analysis"
 
 _parser_cache: dict[str, Parser] = {}
 
 
-
 def get_parser(language: str) -> Parser:
     if language not in _parser_cache:
+        if not has_language(language):
+            # tree-sitter-language-pack caches grammars on demand.
+            download([language])
         if not has_language(language):
             raise ValueError(f"Language not supported by parser: {language}")
         _parser_cache[language] = get_ts_parser(language)

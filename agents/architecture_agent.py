@@ -16,6 +16,7 @@ class ArchitectureAgent(BaseReviewAgent):
         "high_complexity",
         "poor_naming",
         "dead_code",
+        "unused_imports",
         "long_function",
         "duplicate_code",
         "duplication",

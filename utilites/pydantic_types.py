@@ -8,7 +8,7 @@ class Finding(BaseModel):
     finding_type: Literal[
     "long_function", "duplicate_code", "dead_code", "high_complexity",
     "large_class", "poor_naming", "single_responsibility_violation",
-    "tight_coupling", "SQL Injection", "Command Injection", "XSS", "CSRF",
+    "tight_coupling", "unused_imports", "SQL Injection", "Command Injection", "XSS", "CSRF",
     "Path Traversal", "Authentication flaws", "Authorization flaws",
     "Hardcoded credentials", "Insecure cryptography", "Unsafe deserialization",
     "SSRF", "XXE", "Sensitive information leakage", "Race conditions with security impact",

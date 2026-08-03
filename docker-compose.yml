@@ -1,0 +1,51 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: docforge
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/docforge
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - workspaces:/app/workspaces
+      - reports:/app/reports
+    depends_on:
+      - redis
+      - postgres
+  worker:
+    build: .
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=1
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/docforge
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - workspaces:/app/workspaces  
+      - reports:/app/reports
+    depends_on:
+      - redis
+      - postgres
+
+      
+volumes:
+  pgdata:
+  workspaces:
+  reports:

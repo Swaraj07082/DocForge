@@ -13,6 +13,7 @@ class RefactoringAgent(BaseReviewAgent):
         "long_function",
         "duplicate_code",
         "dead_code",
+        "unused_imports",
         "high_complexity",
         "large_class",
         "poor_naming",
