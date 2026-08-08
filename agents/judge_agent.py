@@ -7,6 +7,7 @@ from repo_analyser import analyse_symbol
 from groq import Groq
 import os
 from dotenv import load_dotenv
+from langfuse import observe
 from utilites.pydantic_types import AgentResponse , JudgeResponse
 from utilites.get_analysis import get_analysis
 from utilites.groq_utils import create_chat_completion
@@ -35,6 +36,7 @@ class JudgeAgent(ArchitectureAgent , SecurityAgent , RefactoringAgent , TestAgen
 
         return self.result
 
+    @observe(name="judge-review", as_type="evaluator")
     def review(self, agent_findings: list, context: list) -> str:
         # Trim the code context so the judge request stays under the model's
         # per-minute token budget; the findings already carry affected_code.

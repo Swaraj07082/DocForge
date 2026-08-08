@@ -1,6 +1,7 @@
 import time
 
 from groq import Groq, RateLimitError
+from langfuse import get_client, observe
 
 
 def _retry_after_seconds(err: RateLimitError, default: float) -> float:
@@ -13,6 +14,7 @@ def _retry_after_seconds(err: RateLimitError, default: float) -> float:
     return default
 
 
+@observe(name="groq-chat-completion", as_type="generation")
 def create_chat_completion(client: Groq, *, max_retries: int = 6, base_delay: float = 5.0, **kwargs):
     """Call Groq chat completions, retrying on rate-limit (429) with exponential backoff.
 
@@ -24,7 +26,27 @@ def create_chat_completion(client: Groq, *, max_retries: int = 6, base_delay: fl
     delay = base_delay
     for attempt in range(max_retries):
         try:
-            return client.chat.completions.create(**kwargs)
+            completion = client.chat.completions.create(**kwargs)
+            usage = getattr(completion, "usage", None)
+            get_client().update_current_generation(
+                model=kwargs.get("model"),
+                input=kwargs.get("messages"),
+                output=(
+                    completion.choices[0].message.content
+                    if completion.choices
+                    else None
+                ),
+                usage_details=(
+                    {
+                        "input": usage.prompt_tokens,
+                        "output": usage.completion_tokens,
+                        "total": usage.total_tokens,
+                    }
+                    if usage
+                    else None
+                ),
+            )
+            return completion
         except RateLimitError as err:
             if attempt == max_retries - 1:
                 raise

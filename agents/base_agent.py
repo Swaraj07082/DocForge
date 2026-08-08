@@ -2,6 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from groq import Groq
+from langfuse import get_client, observe
 
 from utilites.get_analysis import get_analysis
 from utilites.groq_utils import create_chat_completion
@@ -57,12 +58,14 @@ Review this code:
 Set the top-level "agent" field to "{self.agent_name}".
 """
 
+    @observe(as_type="agent")
     def get_code(
         self,
         file_name: str,
         static_findings: list | None = None,
         workspace_dir: str = ".",
     ) -> str:
+        get_client().update_current_span(name=self.agent_name)
         analysis = get_analysis(file_name, workspace_dir=workspace_dir)
         prompt = self._build_prompt(analysis, static_findings)
 
