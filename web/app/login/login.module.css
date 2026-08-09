@@ -1,0 +1,63 @@
+.page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(900px 480px at 85% -10%, rgba(34, 197, 94, 0.12), transparent 55%),
+    radial-gradient(700px 420px at 0% 20%, rgba(14, 116, 144, 0.16), transparent 50%),
+    #0c1110;
+  color: #e7eee9;
+}
+
+.panel {
+  width: min(420px, 100%);
+  padding: 36px 32px;
+  border: 1px solid #24312c;
+  background: linear-gradient(180deg, #121a17 0%, #0e1412 100%);
+}
+
+.brand {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 2rem;
+  letter-spacing: -0.03em;
+  margin: 0 0 12px;
+  color: #f3faf5;
+}
+
+.title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+
+.sub {
+  margin: 0 0 28px;
+  color: #9aada3;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.error {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #fecaca;
+  font-size: 0.85rem;
+}
+
+.googleBtn {
+  width: 100%;
+  border: 0;
+  padding: 12px 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: #08110d;
+  background: #86efac;
+}
+
+.googleBtn:hover {
+  background: #bbf7d0;
+}

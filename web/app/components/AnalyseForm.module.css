@@ -1,0 +1,91 @@
+.wrap {
+  display: grid;
+  gap: 20px;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid #24312c;
+  background: #121a17;
+}
+
+.form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #9aada3;
+}
+
+.form input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #2d3d36;
+  background: #0c1110;
+  color: #e7eee9;
+  font: inherit;
+}
+
+.form button,
+.actions button {
+  border: 0;
+  padding: 11px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: #08110d;
+  background: #86efac;
+}
+
+.form button:disabled,
+.actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+
+.ghost {
+  background: transparent !important;
+  color: #e7eee9 !important;
+  border: 1px solid #3d5248 !important;
+}
+
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #fecaca;
+  font-size: 0.9rem;
+}
+
+.result {
+  padding: 18px;
+  border: 1px solid #24312c;
+  background: #0e1412;
+  overflow: auto;
+}
+
+.resultHead {
+  margin-bottom: 8px;
+  font-size: 0.92rem;
+}
+
+.muted {
+  color: #7f9489;
+}
+
+.result pre {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #c5d5cb;
+}
