@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import glob
 import hashlib
 import json
 import os
@@ -141,3 +142,27 @@ def upload_report(report: str, file_name: str) -> dict[str, Any]:
         file_name=object_name,
         content_type="application/json",
     )
+
+
+def get_all_reports(reports_dir: str = "reports") -> list[dict[str, Any]]:
+    """Load all local DocForge reports matching ``reports/report_*.json``.
+
+    Returns a list of dicts with ``path``, ``file_name``, and parsed ``report``.
+    Files that fail to parse as JSON are skipped.
+    """
+    pattern = os.path.join(reports_dir, "report_*.json")
+    results: list[dict[str, Any]] = []
+    for path in sorted(glob.glob(pattern)):
+        try:
+            with open(path, encoding="utf-8") as f:
+                report = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            continue
+        results.append(
+            {
+                "path": path,
+                "file_name": os.path.basename(path),
+                "report": report,
+            }
+        )
+    return results
