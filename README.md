@@ -1,56 +1,60 @@
 # DocForge
 
-> **Multi-agent code review for a target file in a GitHub repository**
+> **Status: complete** — multi-agent code review for a target file in a GitHub repository
 
-DocForge clones a repository, parses it with Tree-sitter, chunks functions and classes, **embeds chunks into a local FAISS index**, builds a **symbol index** and **call graph**, runs static analyzers (Ruff, Radon, Vulture), and runs parallel LLM review agents (architecture, security, refactoring, tests). A judge agent merges findings; you approve or reject the report via the API and frontend.
+DocForge clones a repo, parses it with Tree-sitter, chunks functions and classes, builds a FAISS index, symbol index, and call graph, runs static analyzers (Ruff, Radon, Vulture), then fans out parallel LLM review agents (architecture, security, refactoring, tests). A judge agent merges findings; a human approves or rejects via the Next.js UI. Approved reports are stored in Postgres and uploaded to Backblaze B2.
+
+Originally scoped as a docs/RAG tool; the shipped product is **file-level multi-agent code review** with graph-backed context, async workers, and authenticated human-in-the-loop approval.
 
 ## Table of Contents
 
-- [Motivation](#motivation)
-- [Key Features](#key-features)
+- [What it does](#what-it-does)
+- [Key features](#key-features)
 - [Context: graph vs vector store](#context-graph-vs-vector-store)
-- [System Architecture](#system-architecture)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
+- [System architecture](#system-architecture)
+- [Tech stack](#tech-stack)
+- [Project structure](#project-structure)
 - [Running locally](#running-locally)
-- [Development Roadmap](#development-roadmap)
-- [Skills Demonstrated](#skills-demonstrated)
+- [API](#api)
+- [Evaluation](#evaluation)
+- [Out of scope](#out-of-scope)
+- [Skills demonstrated](#skills-demonstrated)
 
 ---
 
-## Motivation
+## What it does
 
-Teams need consistent, multi-perspective review of a file without manually stitching static tools, call-graph context, and LLM prompts. DocForge automates that pipeline and returns a structured JSON report with human-in-the-loop approval.
+1. Authenticate with Google (Auth.js) → Next.js BFF mints a short-lived JWT for FastAPI
+2. Submit a GitHub clone URL + file path
+3. Celery worker runs the LangGraph pipeline (parse → chunk → embed → analyse → agents → judge)
+4. Pipeline pauses for human approval
+5. On approve: report uploaded to B2 and recorded in Postgres
 
 ---
 
-## Key Features
+## Key features
 
 ### Repository ingestion & parsing
 
 - Clone a GitHub repo (branch configurable)
-- Tree-sitter metadata extraction per supported language
-- Function- and class-level chunking written to `chunked_files/`
+- Tree-sitter metadata extraction for supported languages
+- Function- and class-level chunking into a per-run workspace
 
-### Embeddings & FAISS index (build only)
+### Embeddings & FAISS index
 
-After chunking, the LangGraph pipeline runs `embed_documents`:
-
-- Chunks are turned into LangChain `Document` objects (`embedding/embedding_service.py`)
-- **BGE-small** embeddings with L2 normalization
-- **FAISS IndexFlatIP** saved under `vector_store/` (`index.faiss`, `documents.pkl`)
-
-This prepares the repo for semantic search; see [Context: graph vs vector store](#context-graph-vs-vector-store) for what actually feeds the agents today.
+- Chunks → LangChain `Document`s → **BGE-small** embeddings (L2-normalized)
+- **FAISS IndexFlatIP** under the workspace `vector_store/`
+- Index is built during the pipeline; agents today use call-graph context (see below)
 
 ### Graph-based code context (used by agents)
 
-- Symbol index mapping symbols to file, kind, and source
-- Forward and reverse call graphs for each function
-- Per-function payloads fed to review agents via `get_analysis` / `repo_analyser`
+- Symbol index (symbol → file, kind, source)
+- Forward and reverse call graphs
+- Per-function payloads via `get_analysis` / `repo_analyser`
 
 ### Static analysis grounding
 
-- Ruff, Radon, and Vulture findings (capped) passed into agent prompts as grounding signals
+- Ruff, Radon, and Vulture findings (capped) injected into agent prompts
 
 ### Multi-agent review + judge
 
@@ -62,7 +66,15 @@ This prepares the repo for semantic search; see [Context: graph vs vector store]
 | Test | Test coverage and quality |
 | Judge | Consolidates agent outputs |
 
-Human approval step before the final report is written to `reports/`.
+LangGraph `interrupt` for human approve/reject before finalization.
+
+### Product surface
+
+- **FastAPI** + **Celery** + **Redis** (async analyse / approve + task polling)
+- **Postgres** checkpointer (LangGraph) and report metadata
+- **Next.js** UI with Google OAuth and BFF proxy (`web/`)
+- **Langfuse** tracing on analysis tasks
+- **Backblaze B2** for approved report storage
 
 ---
 
@@ -70,91 +82,78 @@ Human approval step before the final report is written to `reports/`.
 
 | Component | Role in `/analyse` pipeline |
 |-----------|----------------------------|
-| Symbol index + call graphs | **Yes** — primary context for all review agents |
-| FAISS vector store | **Built** during `embed_documents`, **not queried** by agents or `server.py` |
+| Symbol index + call graphs | **Yes** — primary context for review agents |
+| FAISS vector store | **Built** in `embed_documents`; **not queried** by agents |
 
-**Experimental vector search:** after a run (or `python -m embedding.embedding_service`), you can query the index manually with `app.py` (loads `vector_store/` and runs a sample k-NN search). `load_vector_store()` in `embedding_service.py` is available for future retrieval code.
-
-There is no hybrid BM25 + vector retrieval or reranker in this repo yet; the README roadmap below lists that as future work.
+Optional offline FAISS demo: `python app.py` after an index exists. No hybrid BM25 + vector retrieval in the shipped pipeline.
 
 ---
 
-## System Architecture
+## System architecture
 
 ```text
-GitHub Repository
-        │
-        ▼
-Repository Ingestion (GitPython)
-        │
-        ▼
-Tree-Sitter Parsing → parsed JSON
-        │
-        ▼
-Code Chunking
-        │
-        ▼
-Embeddings → FAISS (vector_store/)     ← built, not used by agents yet
-        │
-        ▼
-Symbol Index + Call Graphs               ← agent context
-        │
-        ▼
-Static Tools (Ruff, Radon, Vulture)
-        │
-        ▼
-Parallel Review Agents (Groq)
-        │
-        ▼
-Judge Agent
-        │
-        ▼
-Human Approval (LangGraph interrupt)
-        │
-        ▼
-Final JSON Report
+Browser → Next.js (:3000)  [Google OAuth, httpOnly session]
+              │
+              │  BFF: short-lived JWT (Authorization: Bearer)
+              ▼
+         FastAPI (:8000)  → enqueue Celery task
+              │
+              ▼
+         Celery worker + Redis
+              │
+              ▼
+    LangGraph pipeline (Postgres checkpointer)
+              │
+   clone → parse → chunk → FAISS → symbol/call graph
+              │
+              ▼
+   static tools → parallel agents → judge
+              │
+              ▼
+        human approval (interrupt)
+              │
+         approve → B2 + Postgres
 ```
+
+Auth detail and security notes: [`web/README.md`](web/README.md).
 
 ---
 
-## Tech Stack
+## Tech stack
 
 | Layer | Technologies |
 |-------|--------------|
-| **API** | FastAPI, Uvicorn |
-| **Workflow** | LangGraph |
-| **LLM** | Groq (structured JSON outputs) |
-| **Embeddings / index** | sentence-transformers (BGE-small), FAISS |
-| **Code analysis** | Tree-sitter, Ruff, Radon, Vulture, Semgrep (tools module) |
-| **Frontend** | Static HTML/JS (`frontend/index.html`) |
+| **API / workers** | FastAPI, Uvicorn, Celery, Redis |
+| **Workflow** | LangGraph + PostgresSaver |
+| **LLM** | Groq (structured JSON), Langfuse observability |
+| **Embeddings** | sentence-transformers (BGE-small), FAISS |
+| **Code analysis** | Tree-sitter, Ruff, Radon, Vulture, Semgrep |
+| **Auth** | Auth.js (Google), BFF JWT (PyJWT / jose) |
+| **Storage** | Postgres, Backblaze B2 |
+| **Frontend** | Next.js 15, React 19 |
+| **Ops** | Docker Compose (api, worker, redis, postgres) |
 
 ---
 
-## Project Structure
+## Project structure
 
 ```text
 DocForge/
-├── server.py              # FastAPI: /analyse, /approve
-├── graph.py               # LangGraph pipeline (includes embed_documents)
-├── app.py                 # Standalone FAISS query demo (not used by API)
+├── server.py                 # FastAPI: /analyse, /approve, /tasks/{id}, /me
+├── tasks.py                  # Celery jobs + Langfuse
+├── graph.py                  # LangGraph pipeline
+├── app.py                    # Standalone FAISS query demo
 ├── embedding/
-│   └── embedding_service.py
 ├── ingestion/
-│   └── github_loader.py
 ├── parsing/
-│   └── global_parser.py
 ├── chunking/
-│   └── code_chunker.py
-├── symbol_index.py        # Symbol index & call graphs
-├── repo_analyser.py       # Per-symbol context for agents
-├── context_retrieval.py   # Call-graph helpers (optional utilities)
-├── agents/                # Architecture, security, refactor, test, judge
-├── tools/                 # Static analysis wrappers
-├── utilites/
-│   ├── get_analysis.py
-│   └── groq_utils.py
-├── frontend/
-│   └── index.html
+├── agents/                   # architecture, security, refactor, test, judge
+├── tools/                    # static analysis wrappers
+├── utilites/                 # auth, workspace, B2, Groq helpers
+├── evals/                    # groundedness LLM-judge + JWT smoke tests
+├── web/                      # Next.js Auth.js + BFF + analyse UI
+├── docker-compose.yml
+├── Dockerfile
 └── requirements.txt
 ```
 
@@ -162,53 +161,77 @@ DocForge/
 
 ## Running locally
 
-1. Create a virtual environment and install dependencies:
+### Backend (Docker)
+
+1. Set env in `.env` (at least `GROQ_API_KEY`, `AUTH_SECRET`, plus B2 keys if uploading reports). Compose sets `DATABASE_URL` / `REDIS_URL`.
+2. Start infrastructure and API/worker:
 
    ```bash
-   pip install -r requirements.txt
+   docker compose up --build
    ```
 
-2. Set `GROQ_API_KEY` in a `.env` file.
+   API: `http://localhost:8000` · Redis · Postgres
 
-3. Start the API:
-
-   ```bash
-   python server.py
-   ```
-
-4. Open `frontend/index.html` (e.g. with Live Server) and point it at `http://localhost:8000`.
-
-**API**
-
-- `POST /analyse` — body: `{ "clone_url", "file_path", "branch?" }` → returns judge report and `thread_id` when awaiting approval
-- `POST /approve` — body: `{ "thread_id", "decision" }` → finalize or reject
-
-**Optional — test vector search after indexing:**
+### Frontend
 
 ```bash
-python app.py
+cd web
+cp .env.local.example .env.local   # AUTH_GOOGLE_*, AUTH_SECRET (same as API), etc.
+npm install
+npm run dev
 ```
 
-Requires an existing `vector_store/` from a prior `/analyse` run or `python embedding/embedding_service.py`.
+Open `http://localhost:3000` → Google sign-in → analyse UI. See [`web/README.md`](web/README.md) for OAuth redirect setup.
+
+### Without Docker (API only)
+
+```bash
+pip install -r requirements.txt
+# Redis + Postgres running; DATABASE_URL and REDIS_URL set
+uvicorn server:app --reload --port 8000
+celery -A tasks.celery_app worker --loglevel=info --concurrency=1
+```
 
 ---
 
-## Development Roadmap
+## API
 
-- **Wire retrieval into agents** — query FAISS (and optionally BM25) to augment symbol/call-graph context
-- **Hybrid retrieval** — reciprocal rank fusion and cross-encoder reranking
-- **Documentation generation & drift detection**
-- **PR webhooks and incremental re-indexing**
-- **Graph database** (e.g. Neo4j) for large dependency graphs
+All analyse/approve/task routes require `Authorization: Bearer <JWT>` from the Next.js BFF (shared `AUTH_SECRET`).
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/health` | Liveness |
+| `GET` | `/me` | JWT claims smoke check |
+| `POST` | `/analyse` | `{ clone_url, file_path, branch? }` → `{ status: "queued", task_id }` |
+| `POST` | `/approve` | `{ thread_id, decision }` → queued resume |
+| `GET` | `/tasks/{task_id}` | Poll Celery state / result (`awaiting_approval`, etc.) |
 
 ---
 
-## Skills Demonstrated
+## Evaluation
 
-- LangGraph multi-step and multi-agent workflows
-- Tree-sitter code parsing and chunking
-- Embedding pipelines and FAISS indexing
-- Call-graph–driven context for LLM prompts
-- Static analysis integration with LLM review
-- FastAPI + human-in-the-loop interrupts
-- Structured LLM outputs (JSON schema)
+- **Groundedness (LLM-as-judge):** `python -m evals.llm_judge` over report findings vs `affected_code`
+- **Auth contract:** `python -m evals.test_auth_jwt`
+
+---
+
+## Out of scope
+
+Not implemented in this completed scope (possible extensions):
+
+- Querying FAISS / hybrid BM25 from inside review agents
+- Auto documentation generation and drift detection
+- PR webhooks and incremental re-indexing
+- Graph DB (e.g. Neo4j) for very large dependency graphs
+
+---
+
+## Skills demonstrated
+
+- LangGraph multi-agent workflows with human-in-the-loop interrupts
+- Celery async jobs + Redis + Postgres checkpointing
+- Tree-sitter parsing, chunking, and call-graph context for LLMs
+- Static analysis grounded into structured LLM review
+- Next.js BFF auth (Google OAuth → short-lived API JWT)
+- Observability (Langfuse) and offline groundedness eval
+- Dockerized API + worker stack with object storage for reports
