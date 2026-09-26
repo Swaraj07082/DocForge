@@ -5,5 +5,11 @@ venv/
 parsed_files/
 chunked_files/
 vector_store/
+reports/
+.ruff_cache/
 *.pyc
 .env
+call_graph.json
+reverse_call_graph.json
+symbol_index.json
+evals/groundedness_scorecard.json
