@@ -1,0 +1,35 @@
+# NeMo Guardrails config for DocForge (v0.24.1).
+# Groq via OpenAI-compatible endpoint:
+# https://docs.nvidia.com/nemo/guardrails/v0.24.1/configure-guardrails/yaml-schema/model-configuration
+
+models:
+  - type: main
+    engine: openai
+    model: openai/gpt-oss-20b
+    api_key_env_var: GROQ_API_KEY
+    parameters:
+      base_url: https://api.groq.com/openai/v1
+
+  - type: self_check_input
+    engine: openai
+    model: openai/gpt-oss-20b
+    api_key_env_var: GROQ_API_KEY
+    parameters:
+      base_url: https://api.groq.com/openai/v1
+
+  - type: self_check_output
+    engine: openai
+    model: openai/gpt-oss-20b
+    api_key_env_var: GROQ_API_KEY
+    parameters:
+      base_url: https://api.groq.com/openai/v1
+
+rails:
+  input:
+    flows:
+      - self check input
+  output:
+    flows:
+      - self check output
+
+passthrough: true

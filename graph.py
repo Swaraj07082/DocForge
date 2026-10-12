@@ -31,6 +31,7 @@ from agents.security_agent import SecurityAgent
 from agents.refactoring_agent import RefactoringAgent
 from agents.test_agent import TestAgent
 from agents.judge_agent import JudgeAgent
+from guardrails.gate import check_analysis_request
 from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
@@ -53,6 +54,8 @@ class DocForgeState(TypedDict):
     functions: list[str]
     file_name: str
     static_tools_findings: list[dict]
+    guardrail_allowed: bool
+    guardrail_reason: str
     agent_findings: Annotated[list[dict], operator.add]
     judge_report: str
     approved: bool
@@ -175,6 +178,20 @@ def run_static_tools(state: DocForgeState) -> DocForgeState:
 AGENT_MODEL = "openai/gpt-oss-20b"
 
 
+def input_guardrail(state: DocForgeState) -> dict:
+    """Block unsafe analysis requests before the 4-agent fan-out."""
+    return check_analysis_request(state["clone_url"], state["file_path"])
+
+
+def guardrail_blocked(state: DocForgeState) -> dict:
+    reason = state.get("guardrail_reason") or "Request blocked by input guardrail."
+    return {
+        "judge_report": reason,
+        "final_report": reason,
+        "approved": False,
+    }
+
+
 def architecture_agent(state: DocForgeState) -> dict:
     result = ArchitectureAgent(AGENT_MODEL).get_code(
         state["file_path"],
@@ -211,7 +228,9 @@ def test_agent(state: DocForgeState) -> dict:
     return {"agent_findings": [result]}
 
 
-def router(state : DocForgeState) -> list[Send]:
+def router(state: DocForgeState) -> list[Send] | str:
+    if not state.get("guardrail_allowed", False):
+        return "guardrail_blocked"
     return [
         Send("architecture_agent", state),
         Send("security_agent", state),
@@ -277,6 +296,8 @@ graph.add_node("chunk_documents", chunk_documents)
 graph.add_node("embed_documents", embed_documents)
 graph.add_node("analyse_documents", analyse_documents)
 graph.add_node("run_static_tools", run_static_tools)
+graph.add_node("input_guardrail", input_guardrail)
+graph.add_node("guardrail_blocked", guardrail_blocked)
 graph.add_node("architecture_agent", architecture_agent)
 graph.add_node("security_agent", security_agent)
 graph.add_node("refactoring_agent", refactoring_agent)
@@ -292,12 +313,20 @@ graph.add_edge("parse_documents", "chunk_documents")
 graph.add_edge("chunk_documents", "embed_documents")
 graph.add_edge("embed_documents", "analyse_documents")
 graph.add_edge("analyse_documents", "run_static_tools")
+graph.add_edge("run_static_tools", "input_guardrail")
 
 graph.add_conditional_edges(
-    "run_static_tools",
+    "input_guardrail",
     router,
-    ["architecture_agent", "security_agent", "refactoring_agent", "test_agent"],
+    [
+        "architecture_agent",
+        "security_agent",
+        "refactoring_agent",
+        "test_agent",
+        "guardrail_blocked",
+    ],
 )
+graph.add_edge("guardrail_blocked", END)
 
 graph.add_edge("architecture_agent", "judge_agent")
 graph.add_edge("security_agent", "judge_agent")

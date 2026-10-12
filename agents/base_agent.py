@@ -1,11 +1,9 @@
-import os
-
 from dotenv import load_dotenv
-from groq import Groq
 from langfuse import get_client, observe
+from pydantic import ValidationError
 
+from guardrails.wrap_llm import invoke_guarded_chat, looks_like_guardrail_refusal
 from utilites.get_analysis import get_analysis
-from utilites.groq_utils import create_chat_completion
 from utilites.pydantic_types import AgentResponse
 
 load_dotenv()
@@ -58,6 +56,9 @@ Review this code:
 Set the top-level "agent" field to "{self.agent_name}".
 """
 
+    def _blocked_response_json(self) -> str:
+        return AgentResponse(agent=self.agent_name, findings=[]).model_dump_json()
+
     @observe(as_type="agent")
     def get_code(
         self,
@@ -69,17 +70,12 @@ Set the top-level "agent" field to "{self.agent_name}".
         analysis = get_analysis(file_name, workspace_dir=workspace_dir)
         prompt = self._build_prompt(analysis, static_findings)
 
-        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-
-        chat_completion = create_chat_completion(
-            client,
-            model=self.model,
-            max_tokens=2000,
-            reasoning_effort="low",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": prompt},
-            ],
+        # RunnableRails wraps the Groq-backed ChatOpenAI call
+        # (input rails → LLM → output rails).
+        raw_content = invoke_guarded_chat(
+            self.model,
+            system="You are a helpful assistant.",
+            user=prompt,
             response_format={
                 "type": "json_schema",
                 "json_schema": {
@@ -90,6 +86,11 @@ Set the top-level "agent" field to "{self.agent_name}".
             },
         )
 
-        raw_content = chat_completion.choices[0].message.content
-        validated = AgentResponse.model_validate_json(raw_content)
+        if looks_like_guardrail_refusal(raw_content):
+            return self._blocked_response_json()
+
+        try:
+            validated = AgentResponse.model_validate_json(raw_content)
+        except (ValidationError, TypeError, ValueError):
+            return self._blocked_response_json()
         return validated.model_dump_json()
